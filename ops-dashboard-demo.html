@@ -1,0 +1,1265 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Market Ops · Control</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600;700&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --void:#0B0E14;
+    --panel:rgba(11,14,20,.60);
+    --panel-strong:rgba(8,10,15,.82);
+    --panel-border:rgba(255,255,255,.09);
+    --text-hi:#E9EBEF;
+    --text-lo:#8A94A6;
+    --amber:#FFB020;
+    --cyan:#4FD9D0;
+    --green:#33D17A;
+    --red:#FF4D5E;
+    --orange:#FF9F45;
+    --radius:14px;
+    --night-amount:0;
+  }
+  *{box-sizing:border-box;margin:0;padding:0;}
+  html,body{height:100%;}
+  body{
+    font-family:'IBM Plex Sans',system-ui,-apple-system,sans-serif;
+    color:var(--text-hi);
+    background:#02040A;
+    overflow:hidden;
+    -webkit-font-smoothing:antialiased;
+  }
+  .mono{font-family:'IBM Plex Mono',ui-monospace,monospace;}
+  button{font-family:inherit;cursor:pointer;}
+
+  .app-shell{position:relative;height:100vh;width:100%;display:flex;flex-direction:column;overflow:hidden;}
+
+  /* ---------- sky ---------- */
+  .sky-bg{position:absolute;inset:0;z-index:0;transition:background 90s linear;}
+  .sky-bg.fast{transition:background .35s ease;}
+
+  .stars{position:absolute;inset:0;z-index:1;pointer-events:none;opacity:var(--night-amount);transition:opacity 6s ease;}
+  .star{position:absolute;width:2px;height:2px;border-radius:50%;background:#fff;}
+  .star.tw{animation:twinkle 3.2s ease-in-out infinite;}
+  @keyframes twinkle{0%,100%{opacity:.25}50%{opacity:1}}
+
+  .sun-moon{
+    position:absolute;right:6%;z-index:1;width:40px;height:40px;border-radius:50%;
+    transition:top 90s linear, background 6s ease, box-shadow 6s ease;
+    pointer-events:none;
+  }
+  .sun-moon.fast{transition:top .35s ease, background .35s ease, box-shadow .35s ease;}
+
+  /* ---------- glass panel base ---------- */
+  .panel{
+    background:var(--panel);
+    border:1px solid var(--panel-border);
+    border-radius:var(--radius);
+    backdrop-filter:blur(18px) saturate(140%);
+    -webkit-backdrop-filter:blur(18px) saturate(140%);
+  }
+
+  /* ---------- header ---------- */
+  .header{
+    position:relative;z-index:3;display:flex;align-items:center;justify-content:space-between;
+    gap:16px;padding:0 22px;height:76px;flex-shrink:0;flex-wrap:wrap;
+  }
+  .brand{display:flex;align-items:center;gap:12px;min-width:0;}
+  .brand-mark{
+    width:34px;height:34px;border-radius:9px;flex-shrink:0;
+    background:linear-gradient(135deg,var(--amber),#FF7A45);
+    display:flex;align-items:center;justify-content:center;font-weight:700;color:#0B0E14;font-size:15px;
+  }
+  .brand-title{font-size:13px;font-weight:600;letter-spacing:.06em;}
+  .brand-sub{font-size:11px;color:var(--text-lo);}
+
+  .clock-block{display:flex;flex-direction:column;align-items:center;}
+  .clock-time{font-size:26px;font-weight:600;letter-spacing:.02em;line-height:1;}
+  .clock-date{font-size:11px;color:var(--text-lo);margin-top:2px;}
+
+  .header-status{display:flex;align-items:center;gap:10px;}
+  .chip{
+    display:flex;align-items:center;gap:6px;padding:6px 12px;border-radius:20px;font-size:11px;
+    font-weight:600;letter-spacing:.03em;border:1px solid var(--panel-border);background:var(--panel-strong);
+  }
+  .chip .dot{width:6px;height:6px;border-radius:50%;background:var(--green);}
+  .chip.warn .dot{background:var(--orange);}
+  .chip.live-chip{background:rgba(255,77,94,.14);border-color:rgba(255,77,94,.4);color:var(--red);}
+  .chip.live-chip .dot{background:var(--red);animation:pulseLive 1.8s ease-in-out infinite;}
+  @keyframes pulseLive{0%,100%{opacity:1}50%{opacity:.55}}
+  .icon-btn{
+    width:34px;height:34px;border-radius:9px;border:1px solid var(--panel-border);background:var(--panel-strong);
+    color:var(--text-hi);font-size:15px;display:flex;align-items:center;justify-content:center;
+  }
+  .icon-btn:hover{border-color:var(--cyan);}
+
+  /* ---------- tabs ---------- */
+  .tabbar{
+    position:relative;z-index:3;display:flex;gap:6px;padding:0 22px;height:44px;align-items:center;
+    flex-shrink:0;overflow-x:auto;
+  }
+  .tab{
+    background:transparent;border:1px solid transparent;color:var(--text-lo);font-size:12.5px;font-weight:600;
+    letter-spacing:.03em;padding:8px 14px;border-radius:8px;white-space:nowrap;
+  }
+  .tab.active{color:var(--void);background:var(--amber);}
+  .tab:not(.active):hover{color:var(--text-hi);background:rgba(255,255,255,.06);}
+
+  /* ---------- content ---------- */
+  .content{position:relative;z-index:2;flex:1;overflow:auto;padding:14px 22px 22px;}
+  .view{display:none;}
+  .view.active{display:block;animation:fadeIn .22s ease;}
+  @keyframes fadeIn{from{opacity:0;transform:translateY(4px)}to{opacity:1;transform:none}}
+
+  /* ---------- overview ---------- */
+  .overview-grid{display:grid;grid-template-columns:1fr 340px;gap:16px;align-items:start;}
+  .ticker-grid{display:grid;grid-template-columns:1fr 1fr;gap:14px;}
+  .ticker-card{padding:16px;}
+  .ticker-top{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:6px;}
+  .ticker-name{font-size:12px;color:var(--text-lo);font-weight:600;letter-spacing:.03em;}
+  .badge-sim{font-size:9px;font-weight:700;letter-spacing:.05em;color:var(--amber);border:1px solid rgba(255,176,32,.4);
+    padding:2px 6px;border-radius:5px;background:rgba(255,176,32,.08);}
+  .ticker-price{font-size:26px;font-weight:600;margin-top:4px;}
+  .ticker-change{font-size:12.5px;font-weight:600;margin-top:4px;}
+  .up{color:var(--green);} .down{color:var(--red);}
+  .spark{width:100%;height:34px;margin-top:8px;}
+
+  .side-col{display:flex;flex-direction:column;gap:14px;}
+
+  /* ---------- clock book (IST / US / Korea swipeable pages) ---------- */
+  .clock-book{padding:18px 14px 14px;display:flex;flex-direction:column;align-items:center;gap:8px;overflow:hidden;}
+  .clock-book-live{
+    font-size:10px;font-weight:700;letter-spacing:.04em;color:var(--void);background:var(--red);
+    padding:4px 10px;border-radius:20px;display:flex;align-items:center;gap:6px;
+    animation:pulseLive 1.8s ease-in-out infinite;white-space:nowrap;
+  }
+  .clock-book-live .dot{width:6px;height:6px;border-radius:50%;background:var(--void);flex-shrink:0;}
+  .clock-book-stage{position:relative;width:100%;height:172px;perspective:900px;}
+  .clock-page{
+    position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;
+    gap:3px;backface-visibility:hidden;
+    transition:transform .55s cubic-bezier(.22,.9,.32,1), opacity .5s ease;
+    border-radius:12px;padding:6px;
+  }
+  svg.analog.mini{width:52px;height:52px;margin-bottom:2px;}
+  .page-flag{font-size:20px;line-height:1;}
+  .page-market{font-size:10.5px;color:var(--text-lo);font-weight:600;letter-spacing:.02em;text-align:center;}
+  .page-time{font-size:30px;font-weight:600;margin-top:2px;}
+  .page-date{font-size:10.5px;color:var(--text-lo);}
+  .page-status{font-size:10px;display:flex;align-items:center;gap:5px;margin-top:4px;color:var(--text-lo);font-weight:600;letter-spacing:.02em;}
+  .page-status .dot{width:6px;height:6px;border-radius:50%;background:var(--text-lo);flex-shrink:0;}
+  .page-status.open{color:var(--green);}
+  .page-status.open .dot{background:var(--green);box-shadow:0 0 6px var(--green);}
+  .clock-book-controls{display:flex;align-items:center;gap:8px;}
+  .page-nav{
+    width:24px;height:24px;border-radius:50%;border:1px solid var(--panel-border);background:var(--panel-strong);
+    color:var(--text-hi);display:flex;align-items:center;justify-content:center;font-size:13px;flex-shrink:0;
+  }
+  .page-nav:hover{border-color:var(--cyan);}
+  .page-dots{display:flex;gap:6px;}
+  .page-dots .pd{width:6px;height:6px;border-radius:50%;background:var(--panel-border);transition:background .2s,transform .2s;cursor:pointer;}
+  .page-dots .pd.active{background:var(--amber);transform:scale(1.3);}
+  .auto-pill{
+    font-size:9px;font-weight:700;letter-spacing:.03em;padding:4px 9px;border-radius:20px;
+    border:1px solid var(--panel-border);background:var(--panel-strong);color:var(--text-lo);margin-left:2px;
+  }
+  .auto-pill.active{color:var(--cyan);border-color:rgba(79,217,208,.4);}
+
+  .mini-panel{padding:16px;}
+  .mini-title{font-size:11px;font-weight:700;letter-spacing:.05em;color:var(--text-lo);margin-bottom:10px;text-transform:uppercase;}
+  .mini-row{display:flex;align-items:center;gap:10px;padding:6px 0;font-size:13px;}
+  .mini-row + .mini-row{border-top:1px solid var(--panel-border);}
+  .pip{width:7px;height:7px;border-radius:50%;flex-shrink:0;}
+  .pip.on{background:var(--green);} .pip.off{background:var(--text-lo);}
+
+  /* ---------- analog clock ---------- */
+  svg.analog{width:150px;height:150px;}
+
+  /* ---------- timeline ---------- */
+  .phase-header{display:flex;justify-content:space-between;align-items:baseline;flex-wrap:wrap;gap:10px;margin-bottom:16px;}
+  .phase-now{font-size:24px;font-weight:600;background:linear-gradient(135deg,var(--amber),#FF9F6B);
+    -webkit-background-clip:text;background-clip:text;color:transparent;}
+  .phase-countdown{font-size:13px;color:var(--text-lo);}
+  .phase-countdown b{color:var(--cyan);font-weight:600;}
+  .timeline-track{
+    position:relative;height:14px;border-radius:20px;overflow:hidden;display:flex;gap:3px;
+    background:rgba(255,255,255,.03);padding:0;
+  }
+  .seg{
+    position:relative;display:flex;align-items:center;justify-content:center;font-size:0;
+    color:rgba(255,255,255,.75);overflow:hidden;white-space:nowrap;border-radius:6px;
+    background:rgba(255,255,255,.055);transition:background .4s ease;
+  }
+  .seg.done{background:rgba(51,209,122,.28);}
+  .seg.current{background:linear-gradient(90deg,var(--amber),#FF7A45);box-shadow:0 0 14px rgba(255,176,32,.5);}
+  .now-marker{
+    position:absolute;top:-9px;bottom:-9px;width:2px;background:var(--amber);box-shadow:0 0 10px var(--amber);z-index:3;
+  }
+  .now-marker::before{
+    content:'';position:absolute;top:-6px;left:50%;transform:translateX(-50%);width:10px;height:10px;
+    border-radius:50%;background:var(--amber);box-shadow:0 0 10px var(--amber),0 0 22px rgba(255,176,32,.5);
+    animation:markerPulse 2s ease-in-out infinite;
+  }
+  @keyframes markerPulse{0%,100%{transform:translateX(-50%) scale(1)}50%{transform:translateX(-50%) scale(1.25)}}
+
+  /* ---------- phase card strip ---------- */
+  .phase-strip{display:flex;gap:9px;overflow-x:auto;margin-top:18px;padding-bottom:6px;}
+  .phase-strip::-webkit-scrollbar{height:5px;}
+  .phase-strip::-webkit-scrollbar-thumb{background:var(--panel-border);border-radius:10px;}
+  .phase-card{
+    flex:0 0 auto;min-width:150px;display:flex;align-items:center;gap:9px;padding:11px 13px;border-radius:13px;
+    border:1px solid var(--panel-border);background:rgba(255,255,255,.025);transition:all .35s ease;
+  }
+  .phase-card.done{opacity:.5;}
+  .phase-card.done .phase-card-icon{filter:grayscale(1);}
+  .phase-card.current{
+    border-color:rgba(255,176,32,.5);
+    background:linear-gradient(135deg,rgba(255,176,32,.16),rgba(255,122,69,.06));
+    box-shadow:0 0 0 1px rgba(255,176,32,.2),0 0 18px rgba(255,176,32,.16);
+    animation:phasePulse 2.6s ease-in-out infinite;
+  }
+  @keyframes phasePulse{
+    0%,100%{box-shadow:0 0 0 1px rgba(255,176,32,.2),0 0 18px rgba(255,176,32,.16)}
+    50%{box-shadow:0 0 0 1px rgba(255,176,32,.4),0 0 28px rgba(255,176,32,.28)}
+  }
+  .phase-card-icon{font-size:19px;line-height:1;}
+  .phase-card-label{font-size:11.5px;font-weight:600;}
+  .phase-card-time{font-size:10px;color:var(--text-lo);margin-top:2px;}
+  .phase-card-state{margin-left:auto;width:8px;height:8px;border-radius:50%;background:var(--panel-border);flex-shrink:0;}
+  .phase-card.current .phase-card-state{background:var(--amber);box-shadow:0 0 8px var(--amber);}
+  .phase-card.done .phase-card-state{background:var(--green);}
+
+  .voice-row{display:flex;align-items:center;gap:10px;margin:18px 0 10px;}
+  .btn{background:var(--panel-strong);border:1px solid var(--panel-border);color:var(--text-hi);
+    padding:9px 14px;border-radius:9px;font-size:12.5px;font-weight:600;}
+  .btn:hover{border-color:var(--cyan);}
+  .btn.primary{background:var(--amber);color:#0B0E14;border-color:transparent;}
+
+  .log-panel{padding:14px 16px;max-height:220px;overflow-y:auto;}
+  .log-row{font-size:12px;padding:6px 0;color:var(--text-lo);border-top:1px solid var(--panel-border);}
+  .log-row:first-child{border-top:none;}
+  .log-row .t{color:var(--cyan);margin-right:8px;}
+
+  /* ---------- roster ---------- */
+  .roster-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:16px;}
+  .shift-col{padding:16px;}
+  .shift-head{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:12px;}
+  .shift-name{font-size:14px;font-weight:700;}
+  .shift-window{font-size:11px;color:var(--text-lo);}
+  .handover-ribbon{font-size:10px;font-weight:700;color:var(--void);background:var(--amber);
+    padding:3px 8px;border-radius:6px;display:inline-block;margin-bottom:10px;letter-spacing:.03em;}
+  .current-shift-ribbon{font-size:9.5px;font-weight:700;color:var(--void);background:var(--green);
+    padding:3px 8px;border-radius:6px;display:inline-flex;align-items:center;gap:5px;margin-bottom:10px;letter-spacing:.03em;}
+  .current-shift-ribbon::before{content:'●';font-size:8px;}
+  .shift-col.current-shift{
+    border-color:rgba(51,209,122,.45);
+    box-shadow:0 0 0 1px rgba(51,209,122,.22),0 0 26px rgba(51,209,122,.12);
+  }
+  .person{display:flex;align-items:center;gap:10px;padding:10px 0;border-top:1px solid var(--panel-border);}
+  .person:first-of-type{border-top:none;}
+  .avatar{width:38px;height:38px;flex-shrink:0;border-radius:50%;background:rgba(255,255,255,.05);}
+  .person-info{flex:1;min-width:0;}
+  .person-name{font-size:13px;font-weight:600;}
+  .person-role{font-size:11px;color:var(--text-lo);}
+  .duty-pill{font-size:9.5px;font-weight:700;padding:3px 8px;border-radius:20px;letter-spacing:.03em;flex-shrink:0;}
+  .duty-pill.on{background:rgba(51,209,122,.14);color:var(--green);border:1px solid rgba(51,209,122,.3);}
+  .duty-pill.up{background:rgba(79,217,208,.14);color:var(--cyan);border:1px solid rgba(79,217,208,.3);}
+  .duty-pill.off{background:rgba(138,148,166,.12);color:var(--text-lo);border:1px solid var(--panel-border);}
+
+  /* ---------- tasks ---------- */
+  .tasks-toolbar{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:14px;flex-wrap:wrap;}
+  .persona-select{display:flex;align-items:center;gap:8px;font-size:12.5px;color:var(--text-lo);}
+  select{
+    background:var(--panel-strong);border:1px solid var(--panel-border);color:var(--text-hi);
+    padding:8px 10px;border-radius:8px;font-size:12.5px;font-family:inherit;
+  }
+
+  /* shift selector for the three dynamic tasklists */
+  .shift-tabbar{display:flex;align-items:center;gap:8px;margin-bottom:14px;flex-wrap:wrap;}
+  .shift-tab{
+    position:relative;background:var(--panel-strong);border:1px solid var(--panel-border);color:var(--text-lo);
+    font-size:12px;font-weight:600;padding:8px 16px;border-radius:20px;letter-spacing:.02em;
+  }
+  .shift-tab:hover{color:var(--text-hi);}
+  .shift-tab.active{color:var(--void);background:var(--amber);border-color:transparent;}
+  .shift-tab.is-current::after{
+    content:'';position:absolute;top:-2px;right:-2px;width:8px;height:8px;border-radius:50%;
+    background:var(--green);box-shadow:0 0 6px var(--green);border:1.5px solid var(--void);
+  }
+  .shift-tab-window{font-size:9.5px;color:var(--text-lo);margin-left:2px;}
+
+  .task-list{display:flex;flex-direction:column;gap:10px;}
+  .task-card{padding:14px 16px;display:flex;align-items:center;gap:14px;flex-wrap:wrap;}
+  .task-main{flex:1;min-width:220px;}
+  .task-title{font-size:14px;font-weight:600;}
+  .task-desc{font-size:12px;color:var(--text-lo);margin-top:3px;}
+  .task-meta{font-size:11px;color:var(--text-lo);margin-top:6px;display:flex;gap:10px;flex-wrap:wrap;}
+
+  /* checklist table (per-shift process steps) */
+  .checklist-table{display:flex;flex-direction:column;gap:8px;}
+  .checklist-head{
+    display:grid;grid-template-columns:2.3fr .95fr .85fr 1.3fr 1.05fr;gap:10px;padding:0 16px;
+    font-size:10px;font-weight:700;letter-spacing:.05em;color:var(--text-lo);text-transform:uppercase;
+  }
+  .checklist-row{
+    display:grid;grid-template-columns:2.3fr .95fr .85fr 1.3fr 1.05fr;gap:10px;align-items:center;
+    padding:13px 16px;font-size:12.5px;
+  }
+  .cl-process{font-weight:600;line-height:1.35;}
+  .cl-desc{font-size:10.5px;color:var(--text-lo);font-weight:400;margin-top:3px;}
+  .cl-time,.cl-mode{color:var(--text-lo);font-size:12px;}
+  .cl-exec{display:flex;flex-direction:column;gap:4px;font-size:11.5px;color:var(--text-lo);}
+  .cl-exec .role-badge{align-self:flex-start;}
+  @media (max-width:880px){
+    .checklist-head{display:none;}
+    .checklist-row{grid-template-columns:1fr;gap:6px;padding:14px 16px;}
+    .cl-time,.cl-mode,.cl-exec{font-size:11.5px;}
+  }
+
+  .prio{font-size:9.5px;font-weight:700;padding:2px 7px;border-radius:5px;letter-spacing:.03em;margin-right:6px;}
+  .prio.low{background:rgba(79,217,208,.14);color:var(--cyan);}
+  .prio.medium{background:rgba(255,159,69,.14);color:var(--orange);}
+  .prio.high{background:rgba(255,176,32,.14);color:var(--amber);}
+  .prio.critical{background:rgba(255,77,94,.14);color:var(--red);}
+  .role-badge{border:1px solid var(--panel-border);padding:2px 7px;border-radius:5px;}
+  .status-pill{
+    font-size:11px;font-weight:700;padding:8px 14px;border-radius:20px;border:1px solid transparent;
+    letter-spacing:.03em;flex-shrink:0;transition:transform .15s ease;
+  }
+  .status-pill.open{background:rgba(138,148,166,.14);color:var(--text-lo);border-color:var(--panel-border);}
+  .status-pill.in_progress{background:rgba(79,217,208,.14);color:var(--cyan);border-color:rgba(79,217,208,.3);}
+  .status-pill.completed{background:rgba(51,209,122,.14);color:var(--green);border-color:rgba(51,209,122,.3);}
+  .status-pill:not(.disabled):hover{transform:scale(1.04);}
+  .status-pill.disabled{opacity:.45;cursor:not-allowed;}
+  .status-pill.flash{animation:flash .5s ease;}
+  @keyframes flash{0%{box-shadow:0 0 0 0 rgba(51,209,122,.6)}100%{box-shadow:0 0 0 12px rgba(51,209,122,0)}}
+  .completed-note{font-size:10.5px;color:var(--text-lo);margin-top:5px;}
+
+  /* ---------- sky preview control ---------- */
+  .sky-preview{
+    position:absolute;right:16px;bottom:16px;z-index:4;padding:10px 12px;font-size:11px;
+    display:flex;flex-direction:column;gap:8px;width:220px;
+  }
+  .sky-preview.collapsed{width:auto;}
+  .sky-preview-head{display:flex;align-items:center;justify-content:space-between;gap:8px;cursor:pointer;}
+  .sky-preview-body{display:flex;flex-direction:column;gap:8px;}
+  .sky-preview.collapsed .sky-preview-body{display:none;}
+  input[type=range]{width:100%;accent-color:var(--amber);}
+  .preview-row{display:flex;gap:8px;}
+  .preview-row .btn{flex:1;padding:7px 10px;font-size:11px;}
+
+  @media (max-width:880px){
+    .overview-grid{grid-template-columns:1fr;}
+    .roster-grid{grid-template-columns:1fr;}
+    .header{height:auto;padding:12px 16px;}
+    .clock-block{order:3;width:100%;align-items:flex-start;}
+  }
+  @media (prefers-reduced-motion:reduce){
+    .star.tw{animation:none;opacity:.6;}
+    .view.active{animation:none;}
+  }
+</style>
+</head>
+<body>
+<div class="app-shell">
+  <div class="sky-bg" id="skyBg"></div>
+  <div class="stars" id="stars"></div>
+  <div class="sun-moon" id="sunMoon"></div>
+
+  <header class="header">
+    <div class="brand">
+      <div class="brand-mark">◈</div>
+      <div>
+        <div class="brand-title">MARKET OPS · CONTROL</div>
+        <div class="brand-sub" id="phaseLabelSmall">Loading session state…</div>
+      </div>
+    </div>
+    <div class="clock-block">
+      <div class="clock-time mono" id="headerClock">--:--:--</div>
+      <div class="clock-date" id="headerDate">—</div>
+    </div>
+    <div class="header-status">
+      <div class="chip live-chip" id="globalLiveChip" style="display:none;"><span class="dot"></span><span id="globalLiveChipText"></span></div>
+      <div class="chip" id="sessionChip"><span class="dot"></span><span id="sessionChipText">—</span></div>
+      <div class="chip" id="syncChip"><span class="dot"></span>IST · SYNCED</div>
+      <button class="icon-btn" id="muteBtn" title="Toggle voice announcements">🔊</button>
+    </div>
+  </header>
+
+  <nav class="tabbar">
+    <button class="tab active" data-tab="overview">Overview</button>
+    <button class="tab" data-tab="timeline">Timeline</button>
+    <button class="tab" data-tab="roster">Roster</button>
+    <button class="tab" data-tab="tasks">Tasks</button>
+  </nav>
+
+  <main class="content">
+
+    <!-- OVERVIEW -->
+    <section class="view active" id="view-overview">
+      <div class="overview-grid">
+        <div>
+          <div class="ticker-grid" id="tickerGrid"></div>
+        </div>
+        <div class="side-col">
+          <div class="clock-book panel">
+            <div class="clock-book-live" id="clockLiveTag" style="display:none;"><span class="dot"></span><span id="clockLiveTagText"></span></div>
+            <div class="clock-book-stage" id="clockStage">
+              <div class="clock-page" data-idx="0">
+                <svg class="analog mini" id="analogClock" viewBox="0 0 150 150"></svg>
+                <div class="page-flag">🇮🇳</div>
+                <div class="page-market">India · NSE/BSE</div>
+                <div class="page-time mono" id="page-time-IST">--:--:--</div>
+                <div class="page-date" id="page-date-IST">—</div>
+                <div class="page-status" id="page-status-IST"><span class="dot"></span>—</div>
+              </div>
+              <div class="clock-page" data-idx="1">
+                <div class="page-flag">🇺🇸</div>
+                <div class="page-market">United States · NYSE</div>
+                <div class="page-time mono" id="page-time-US">--:--:--</div>
+                <div class="page-date" id="page-date-US">—</div>
+                <div class="page-status" id="page-status-US"><span class="dot"></span>—</div>
+              </div>
+              <div class="clock-page" data-idx="2">
+                <div class="page-flag">🇰🇷</div>
+                <div class="page-market">South Korea · KRX</div>
+                <div class="page-time mono" id="page-time-KR">--:--:--</div>
+                <div class="page-date" id="page-date-KR">—</div>
+                <div class="page-status" id="page-status-KR"><span class="dot"></span>—</div>
+              </div>
+            </div>
+            <div class="clock-book-controls">
+              <button class="page-nav" id="pagePrev" title="Previous market">‹</button>
+              <div class="page-dots" id="pageDots"></div>
+              <button class="page-nav" id="pageNext" title="Next market">›</button>
+              <button class="auto-pill active" id="autoFollowBtn" title="Auto-follow whichever market is live">⟳ AUTO</button>
+            </div>
+          </div>
+          <div class="mini-panel panel">
+            <div class="mini-title">On duty now</div>
+            <div id="onDutyMini"></div>
+          </div>
+          <div class="mini-panel panel">
+            <div class="mini-title">Task snapshot</div>
+            <div id="taskSnapshot"></div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- TIMELINE -->
+    <section class="view" id="view-timeline">
+      <div class="panel" style="padding:20px;">
+        <div class="phase-header">
+          <div>
+            <div class="phase-now" id="phaseNow">—</div>
+            <div class="phase-countdown" id="phaseCountdown">—</div>
+          </div>
+        </div>
+        <div class="timeline-track" id="timelineTrack"></div>
+        <div class="phase-strip" id="phaseStrip"></div>
+        <div class="voice-row">
+          <button class="btn primary" id="testVoiceBtn">▶ Test voice alert for current phase</button>
+          <button class="icon-btn" id="muteBtn2" title="Toggle voice announcements">🔊</button>
+        </div>
+      </div>
+      <div class="panel log-panel" style="margin-top:16px;" id="logPanel">
+        <div class="mini-title" style="padding:2px 2px 8px;">Announcement log</div>
+        <div id="logRows"></div>
+      </div>
+    </section>
+
+    <!-- ROSTER -->
+    <section class="view" id="view-roster">
+      <div class="roster-grid" id="rosterGrid"></div>
+    </section>
+
+    <!-- TASKS -->
+    <section class="view" id="view-tasks">
+      <div class="tasks-toolbar">
+        <div class="persona-select">
+          Acting as
+          <select id="personaSelect"></select>
+        </div>
+        <div style="font-size:11px;color:var(--text-lo);">Click a status pill to advance it — permission is checked against the selected role. Completions are written to the audit log.</div>
+      </div>
+      <div class="shift-tabbar" id="shiftTabbar"></div>
+      <div class="task-list" id="taskList"></div>
+    </section>
+
+  </main>
+
+  <div class="panel sky-preview collapsed" id="skyPreview">
+    <div class="sky-preview-head" id="skyPreviewToggle">
+      <span id="skyPreviewLabel">🌤 Sky preview</span>
+      <span id="skyPreviewCaret">▸</span>
+    </div>
+    <div class="sky-preview-body">
+      <div style="color:var(--text-lo);">Demo-only: scrub or sweep a full day to see the sky engine react. Doesn't affect the clock, session or tasks.</div>
+      <input type="range" id="previewSlider" min="0" max="1439" value="480">
+      <div class="preview-row">
+        <button class="btn" id="previewPlayBtn">▶ Sweep 24h</button>
+        <button class="btn" id="previewLiveBtn">Live sky</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+/* ===================== CONFIG ===================== */
+const LAT = 19.076, LON = 72.8777, TZ_OFFSET = 5.5; // Mumbai, IST
+
+// NSE cash-segment session config, effective from the Aug 3 2026 CAS rollout.
+// Stored as data, not hardcoded logic, per the design doc — update this table
+// when NSE issues the next circular (a second phase changes pre-open from 7 Sep 2026).
+const SESSIONS = [
+  { id:'PRE_OPEN_COLLECT', label:'Pre-Open · Collection', start:'09:00', end:'09:08', voice:'Pre-open session has started.' },
+  { id:'PRE_OPEN_MATCH',   label:'Pre-Open · Matching',   start:'09:08', end:'09:12', voice:'Pre-open order matching is underway.' },
+  { id:'PRE_OPEN_BUFFER',  label:'Pre-Open · Buffer',     start:'09:12', end:'09:15', voice:'Pre-open buffer window.' },
+  { id:'NORMAL',           label:'Normal Market',         start:'09:15', end:'15:15', voice:'Normal market is now open.' },
+  { id:'CAS_WINDOW',       label:'Closing Auction (CAS)', start:'15:15', end:'15:35', voice:'Closing auction session has begun.' },
+  { id:'CAS_SETTLEMENT',   label:'Auction Confirmation',  start:'15:35', end:'15:50', voice:'Closing auction price is being confirmed.' },
+  { id:'POST_CLOSE',       label:'Post-Close',            start:'15:50', end:'16:00', voice:'Post-close session has started.' },
+  { id:'MODIFICATION',     label:'Trade Modification',    start:'16:00', end:'16:15', voice:'Trade modification window is open.' },
+];
+
+function toMin(hhmm){ const [h,m] = hhmm.split(':').map(Number); return h*60+m; }
+const SESSION_START = toMin(SESSIONS[0].start), SESSION_END = toMin(SESSIONS[SESSIONS.length-1].end);
+
+const SESSION_ICON = {
+  PRE_OPEN_COLLECT:'🌅', PRE_OPEN_MATCH:'🌅', PRE_OPEN_BUFFER:'🌅', NORMAL:'📈',
+  CAS_WINDOW:'🔔', CAS_SETTLEMENT:'🔔', POST_CLOSE:'🌇', MODIFICATION:'🗂️'
+};
+
+// Multi-market clock config — simple continuous open/close window per exchange,
+// weekday-only, no per-market holiday calendar yet (see Design Doc §16 open
+// assumptions). Good enough to drive the clock carousel's live/closed state;
+// NOT a substitute for a real per-market schedule engine if full session
+// phases for US/KR are ever needed (see roadmap §17).
+const MARKETS = [
+  { key:'IST', flag:'🇮🇳', name:'India · NSE/BSE',      tz:'Asia/Kolkata',      open:'09:15', close:'15:30' },
+  { key:'US',  flag:'🇺🇸', name:'United States · NYSE', tz:'America/New_York', open:'09:30', close:'16:00' },
+  { key:'KR',  flag:'🇰🇷', name:'South Korea · KRX',    tz:'Asia/Seoul',       open:'09:00', close:'15:30' },
+];
+
+/* ===================== IST TIME (Intl-based, DST/offset safe) ===================== */
+function getISTParts(){
+  const fmt = new Intl.DateTimeFormat('en-GB', {
+    timeZone:'Asia/Kolkata', hour12:false, weekday:'short',
+    year:'numeric', month:'2-digit', day:'2-digit',
+    hour:'2-digit', minute:'2-digit', second:'2-digit'
+  });
+  const p = {}; fmt.formatToParts(new Date()).forEach(x=>p[x.type]=x.value);
+  return { year:+p.year, month:+p.month, day:+p.day, hour:+p.hour, minute:+p.minute, second:+p.second, weekday:p.weekday };
+}
+
+// Same idea as getISTParts but for any IANA timezone — powers the US/Korea clock pages.
+function getTZParts(tz){
+  const fmt = new Intl.DateTimeFormat('en-GB', {
+    timeZone:tz, hour12:false, weekday:'short',
+    year:'numeric', month:'2-digit', day:'2-digit',
+    hour:'2-digit', minute:'2-digit', second:'2-digit'
+  });
+  const p = {}; fmt.formatToParts(new Date()).forEach(x=>p[x.type]=x.value);
+  return { year:+p.year, month:+p.month, day:+p.day, hour:+p.hour, minute:+p.minute, second:+p.second, weekday:p.weekday };
+}
+
+// Open/closed state for a market entry from MARKETS, computed in that market's
+// own local time (so IST viewers correctly see e.g. NYSE as open at 00:30 IST).
+function marketState(m){
+  const p = getTZParts(m.tz);
+  const nowMin = p.hour*60 + p.minute;
+  const openMin = toMin(m.open), closeMin = toMin(m.close);
+  const isWeekday = p.weekday !== 'Sat' && p.weekday !== 'Sun';
+  const isOpen = isWeekday && nowMin >= openMin && nowMin < closeMin;
+  let statusLabel;
+  if(!isWeekday) statusLabel = 'Weekend';
+  else if(nowMin < openMin) statusLabel = `Opens in ${openMin - nowMin} min`;
+  else if(isOpen) statusLabel = `Closes in ${closeMin - nowMin} min`;
+  else statusLabel = 'Closed for the day';
+  return { parts:p, isOpen, statusLabel };
+}
+
+/* ===================== SOLAR ELEVATION (simplified NOAA algorithm) ===================== */
+function solarElevationDeg(parts, lat, lon, tzOffsetHours){
+  const rad = Math.PI/180;
+  const dayOfYear = Math.floor((Date.UTC(parts.year, parts.month-1, parts.day) - Date.UTC(parts.year,0,0)) / 86400000);
+  const hourFrac = parts.hour + parts.minute/60 + parts.second/3600;
+  const gamma = (2*Math.PI/365) * (dayOfYear - 1 + (hourFrac-12)/24);
+  const eqTime = 229.18*(0.000075 + 0.001868*Math.cos(gamma) - 0.032077*Math.sin(gamma)
+                 - 0.014615*Math.cos(2*gamma) - 0.040849*Math.sin(2*gamma));
+  const decl = 0.006918 - 0.399912*Math.cos(gamma) + 0.070257*Math.sin(gamma)
+               - 0.006758*Math.cos(2*gamma) + 0.000907*Math.sin(2*gamma)
+               - 0.002697*Math.cos(3*gamma) + 0.00148*Math.sin(3*gamma);
+  const timeOffset = eqTime + 4*lon - 60*tzOffsetHours;
+  const minutesOfDay = parts.hour*60 + parts.minute + parts.second/60;
+  const trueSolarTime = minutesOfDay + timeOffset;
+  const hourAngle = (trueSolarTime/4 - 180) * rad;
+  const latRad = lat*rad;
+  const elevRad = Math.asin(Math.sin(latRad)*Math.sin(decl) + Math.cos(latRad)*Math.cos(decl)*Math.cos(hourAngle));
+  return elevRad/rad;
+}
+
+/* ===================== GRADIENT KEYFRAMES ===================== */
+const STOPS = [
+  { el:-90,   c:['#02040A','#050810','#0A0E1A'] },
+  { el:-18,   c:['#050912','#0D1226','#161A35'] },
+  { el:-12,   c:['#0D1230','#241B4D','#3A1F52'] },
+  { el:-6,    c:['#241B4D','#6B2A5C','#C9526B'] },
+  { el:-0.83, c:['#4A2A6B','#E0637A','#FFA76B'] },
+  { el:6,     c:['#3F6FAE','#F3A866','#FFD39A'] },
+  { el:20,    c:['#1E5FA8','#4A90D9','#BFE0F5'] },
+  { el:90,    c:['#1E5FA8','#4A90D9','#BFE0F5'] },
+];
+function hexToRgb(h){ const n=parseInt(h.slice(1),16); return {r:(n>>16)&255,g:(n>>8)&255,b:n&255}; }
+function lerpHex(a,b,t){
+  const A=hexToRgb(a), B=hexToRgb(b);
+  return `rgb(${Math.round(A.r+(B.r-A.r)*t)},${Math.round(A.g+(B.g-A.g)*t)},${Math.round(A.b+(B.b-A.b)*t)})`;
+}
+function gradientForElevation(el){
+  let lo=STOPS[0], hi=STOPS[STOPS.length-1];
+  for(let i=0;i<STOPS.length-1;i++){ if(el>=STOPS[i].el && el<=STOPS[i+1].el){ lo=STOPS[i]; hi=STOPS[i+1]; break; } }
+  if(el<=STOPS[0].el){ lo=hi=STOPS[0]; } if(el>=STOPS[STOPS.length-1].el){ lo=hi=STOPS[STOPS.length-1]; }
+  const t = Math.min(1,Math.max(0,(el-lo.el)/((hi.el-lo.el)||1)));
+  return `linear-gradient(180deg, ${lerpHex(lo.c[0],hi.c[0],t)} 0%, ${lerpHex(lo.c[1],hi.c[1],t)} 55%, ${lerpHex(lo.c[2],hi.c[2],t)} 100%)`;
+}
+
+/* ===================== SKY RENDER ===================== */
+const skyBg = document.getElementById('skyBg');
+const sunMoon = document.getElementById('sunMoon');
+const starsEl = document.getElementById('stars');
+let previewMode = false, previewMinuteOfDay = 480;
+
+// seed stars
+for(let i=0;i<70;i++){
+  const s = document.createElement('div');
+  s.className = 'star' + (Math.random()>0.4 ? ' tw' : '');
+  s.style.left = Math.random()*100+'%';
+  s.style.top = Math.random()*70+'%';
+  s.style.animationDelay = (Math.random()*3)+'s';
+  starsEl.appendChild(s);
+}
+
+function renderSky(elDeg){
+  skyBg.style.background = gradientForElevation(elDeg);
+  const nightAmount = Math.min(1, Math.max(0, -elDeg/18));
+  document.documentElement.style.setProperty('--night-amount', nightAmount.toFixed(2));
+
+  const topPct = Math.min(94, Math.max(6, 50 - elDeg*0.9));
+  sunMoon.style.top = topPct + '%';
+  const isSun = elDeg > -0.83;
+  const glow = Math.max(0.15, 1 - Math.abs(elDeg)/40);
+  if(isSun){
+    const warm = Math.max(0, 1 - elDeg/25);
+    sunMoon.style.background = `radial-gradient(circle, ${lerpHex('#FFE9B0','#FFA76B',warm)}, ${lerpHex('#FFC24D','#FF7A45',warm)})`;
+    sunMoon.style.boxShadow = `0 0 ${18+glow*26}px ${18+glow*26}px rgba(255,180,90,${0.10+glow*0.10})`;
+  } else {
+    sunMoon.style.background = 'radial-gradient(circle, #E9EDF5, #B9C4D6)';
+    sunMoon.style.boxShadow = `0 0 ${14+glow*18}px ${10+glow*14}px rgba(180,200,230,0.10)`;
+  }
+}
+
+function currentElevation(){
+  if(previewMode){
+    const parts = getISTParts();
+    parts.hour = Math.floor(previewMinuteOfDay/60);
+    parts.minute = previewMinuteOfDay%60;
+    parts.second = 0;
+    return solarElevationDeg(parts, LAT, LON, TZ_OFFSET);
+  }
+  return solarElevationDeg(getISTParts(), LAT, LON, TZ_OFFSET);
+}
+
+/* ===================== SKY PREVIEW CONTROL ===================== */
+const skyPreviewEl = document.getElementById('skyPreview');
+const previewSlider = document.getElementById('previewSlider');
+document.getElementById('skyPreviewToggle').onclick = () => {
+  skyPreviewEl.classList.toggle('collapsed');
+  document.getElementById('skyPreviewCaret').textContent = skyPreviewEl.classList.contains('collapsed') ? '▸' : '▾';
+};
+function setFastTransition(on){
+  skyBg.classList.toggle('fast', on);
+  sunMoon.classList.toggle('fast', on);
+}
+previewSlider.oninput = () => {
+  previewMode = true; setFastTransition(true);
+  previewMinuteOfDay = +previewSlider.value;
+  renderSky(currentElevation());
+};
+document.getElementById('previewLiveBtn').onclick = () => {
+  previewMode = false; setFastTransition(false);
+  renderSky(currentElevation());
+};
+let sweepTimer = null;
+document.getElementById('previewPlayBtn').onclick = () => {
+  previewMode = true; setFastTransition(true);
+  if(sweepTimer) clearInterval(sweepTimer);
+  let m = 0; previewSlider.value = 0;
+  sweepTimer = setInterval(() => {
+    m += 24; // ~24 sim-minutes per tick
+    if(m >= 1440){ clearInterval(sweepTimer); previewMode=false; setFastTransition(false); renderSky(currentElevation()); return; }
+    previewMinuteOfDay = m; previewSlider.value = m;
+    renderSky(currentElevation());
+  }, 90);
+};
+
+/* ===================== ANALOG CLOCK ===================== */
+const analog = document.getElementById('analogClock');
+analog.innerHTML = `
+  <circle cx="75" cy="75" r="70" fill="none" stroke="rgba(255,255,255,.12)" stroke-width="1.5"/>
+  ${Array.from({length:12}).map((_,i)=>{
+    const a=(i*30)*Math.PI/180, x1=75+60*Math.sin(a), y1=75-60*Math.cos(a), x2=75+66*Math.sin(a), y2=75-66*Math.cos(a);
+    return `<line x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}" stroke="rgba(255,255,255,.35)" stroke-width="2"/>`;
+  }).join('')}
+  <line id="hHand" x1="75" y1="75" x2="75" y2="42" stroke="#E9EBEF" stroke-width="4" stroke-linecap="round"/>
+  <line id="mHand" x1="75" y1="75" x2="75" y2="26" stroke="#E9EBEF" stroke-width="3" stroke-linecap="round"/>
+  <line id="sHand" x1="75" y1="75" x2="75" y2="20" stroke="#FFB020" stroke-width="1.5" stroke-linecap="round"/>
+  <circle cx="75" cy="75" r="4" fill="#FFB020"/>
+`;
+const hHand = document.getElementById('hHand'), mHand = document.getElementById('mHand'), sHand = document.getElementById('sHand');
+
+/* ===================== CLOCK BOOK (IST / US / Korea, swipeable pages) =====================
+   Three "book pages," one per tracked market. Defaults to the IST page. If the
+   IST market is closed and exactly one tracked market is currently in its
+   trading session, the carousel auto-flips to that page and a live badge
+   appears in both the card and the header — e.g. at 00:30 IST, NSE is closed
+   but NYSE is still trading, so this auto-surfaces the US page labelled
+   "US Market Live Now." Manual swipe/tap always wins; auto-follow resumes on
+   its own after 90s of no interaction, or immediately via the "AUTO" pill. */
+const clockPages = Array.from(document.querySelectorAll('.clock-page'));
+const pageDotsWrap = document.getElementById('pageDots');
+let activePage = 0, clockAutoFollow = true, lastManualPageAt = 0;
+
+MARKETS.forEach((m, i) => {
+  const dot = document.createElement('div');
+  dot.className = 'pd' + (i === 0 ? ' active' : '');
+  dot.title = m.name;
+  dot.onclick = () => gotoClockPage(i, true);
+  pageDotsWrap.appendChild(dot);
+});
+
+function layoutClockPages(){
+  clockPages.forEach((el, i) => {
+    const offset = i - activePage;
+    let tx = 0, rot = 0, sc = 1, op = 1, z = 3;
+    if(offset === 0){ tx = 0; rot = 0; sc = 1; op = 1; z = 3; }
+    else if(Math.abs(offset) === 1){ tx = offset*92 + '%'; rot = offset*-28; sc = .84; op = .35; z = 2; }
+    else { tx = offset*160 + '%'; rot = offset*-40; sc = .7; op = 0; z = 1; }
+    el.style.transform = `translateX(${tx}) rotateY(${rot}deg) scale(${sc})`;
+    el.style.opacity = op; el.style.zIndex = z; el.style.pointerEvents = offset === 0 ? 'auto' : 'none';
+  });
+  document.querySelectorAll('.pd').forEach((d, i) => d.classList.toggle('active', i === activePage));
+}
+function gotoClockPage(i, manual){
+  activePage = (i + MARKETS.length) % MARKETS.length;
+  layoutClockPages();
+  if(manual){
+    clockAutoFollow = false; lastManualPageAt = Date.now();
+    document.getElementById('autoFollowBtn').classList.remove('active');
+  }
+}
+document.getElementById('pagePrev').onclick = () => gotoClockPage(activePage - 1, true);
+document.getElementById('pageNext').onclick = () => gotoClockPage(activePage + 1, true);
+document.getElementById('autoFollowBtn').onclick = () => {
+  clockAutoFollow = true;
+  document.getElementById('autoFollowBtn').classList.add('active');
+};
+layoutClockPages();
+
+function updateClockBook(){
+  const states = MARKETS.map(m => ({ m, s: marketState(m) }));
+
+  states.forEach(({ m, s }) => {
+    const hh = String(s.parts.hour).padStart(2,'0'), mm = String(s.parts.minute).padStart(2,'0'), ss = String(s.parts.second).padStart(2,'0');
+    document.getElementById(`page-time-${m.key}`).textContent = `${hh}:${mm}:${ss}`;
+    document.getElementById(`page-date-${m.key}`).textContent =
+      `${s.parts.weekday}, ${String(s.parts.day).padStart(2,'0')}/${String(s.parts.month).padStart(2,'0')} · ${m.tz.split('/').pop().replace('_',' ')}`;
+    const statusEl = document.getElementById(`page-status-${m.key}`);
+    statusEl.className = 'page-status' + (s.isOpen ? ' open' : '');
+    statusEl.innerHTML = `<span class="dot"></span>${s.isOpen ? 'MARKET OPEN' : 'MARKET CLOSED'} · ${s.statusLabel}`;
+  });
+
+  const istOpen = states[0].s.isOpen, usOpen = states[1].s.isOpen, krOpen = states[2].s.isOpen;
+  const cardTag = document.getElementById('clockLiveTag'), cardTagText = document.getElementById('clockLiveTagText');
+  const headerChip = document.getElementById('globalLiveChip'), headerChipText = document.getElementById('globalLiveChipText');
+
+  if(clockAutoFollow){
+    let target = 0, label = null;
+    if(istOpen){ target = 0; }
+    else if(usOpen){ target = 1; label = 'US Market Live Now'; }
+    else if(krOpen){ target = 2; label = 'Korea Market Live Now'; }
+    if(target !== activePage){ activePage = target; layoutClockPages(); }
+    if(label){
+      cardTag.style.display = 'flex'; cardTagText.textContent = label;
+      headerChip.style.display = 'flex'; headerChipText.textContent = label.toUpperCase();
+    } else {
+      cardTag.style.display = 'none'; headerChip.style.display = 'none';
+    }
+  } else {
+    cardTag.style.display = 'none'; headerChip.style.display = 'none';
+    if(Date.now() - lastManualPageAt > 90000){
+      clockAutoFollow = true;
+      document.getElementById('autoFollowBtn').classList.add('active');
+    }
+  }
+}
+
+/* ===================== INDEX TICKERS (simulated tier-3 feed) ===================== */
+const SYMBOLS = [
+  { key:'NIFTY',  name:'NIFTY 50',    price:25848.30 },
+  { key:'SENSEX', name:'SENSEX',      price:84912.60 },
+  { key:'BANKNIFTY', name:'BANK NIFTY', price:55307.15 },
+  { key:'VIX',    name:'INDIA VIX',   price:13.22 },
+];
+SYMBOLS.forEach(s => { s.open = s.price; s.history = Array.from({length:30},()=>s.price); });
+
+const tickerGrid = document.getElementById('tickerGrid');
+SYMBOLS.forEach(s => {
+  const card = document.createElement('div');
+  card.className = 'ticker-card panel';
+  card.innerHTML = `
+    <div class="ticker-top">
+      <span class="ticker-name">${s.name}</span>
+      <span class="badge-sim">SIMULATED</span>
+    </div>
+    <div class="ticker-price mono" id="price-${s.key}">${s.price.toFixed(2)}</div>
+    <div class="ticker-change mono" id="chg-${s.key}">+0.00 (0.00%)</div>
+    <svg class="spark" id="spark-${s.key}" viewBox="0 0 100 34" preserveAspectRatio="none"></svg>
+  `;
+  tickerGrid.appendChild(card);
+});
+function tickSymbols(){
+  SYMBOLS.forEach(s => {
+    const vol = s.key==='VIX' ? 0.06 : s.price*0.0009;
+    s.price = Math.max(0.5, s.price + (Math.random()-0.5)*vol*2);
+    s.history.push(s.price); if(s.history.length>30) s.history.shift();
+    const change = s.price - s.open, pct = (change/s.open)*100;
+    const up = change >= 0;
+    document.getElementById(`price-${s.key}`).textContent = s.price.toFixed(2);
+    const chgEl = document.getElementById(`chg-${s.key}`);
+    chgEl.textContent = `${up?'+':''}${change.toFixed(2)} (${up?'+':''}${pct.toFixed(2)}%)`;
+    chgEl.className = 'ticker-change mono ' + (up?'up':'down');
+    const min = Math.min(...s.history), max = Math.max(...s.history), range = (max-min)||1;
+    const pts = s.history.map((v,i)=>`${(i/(s.history.length-1))*100},${34 - ((v-min)/range)*30 - 2}`).join(' ');
+    document.getElementById(`spark-${s.key}`).innerHTML =
+      `<polyline points="${pts}" fill="none" stroke="${up?'#33D17A':'#FF4D5E'}" stroke-width="1.6" stroke-linejoin="round" stroke-linecap="round"/>`;
+  });
+}
+
+/* ===================== SESSION / SCHEDULE ENGINE ===================== */
+function currentSession(nowMin, weekday){
+  if(weekday==='Sat' || weekday==='Sun') return { id:'HOLIDAY', label:'Market Closed · Weekend', voice:'Market is closed today.' };
+  if(nowMin < SESSION_START) return { id:'CLOSED_PRE', label:'Market Closed', voice:'Market is closed.' };
+  if(nowMin >= SESSION_END) return { id:'CLOSED_POST', label:'Market Closed for the Day', voice:'Market is now closed for the day.' };
+  for(const s of SESSIONS){ if(nowMin >= toMin(s.start) && nowMin < toMin(s.end)) return s; }
+  return { id:'CLOSED', label:'Market Closed', voice:'Market is closed.' };
+}
+function fmtHHMM(min){ const h=Math.floor(min/60), m=min%60; return `${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}`; }
+
+const timelineTrack = document.getElementById('timelineTrack');
+const phaseStrip = document.getElementById('phaseStrip');
+const totalWindow = SESSION_END - SESSION_START;
+SESSIONS.forEach(s => {
+  const dur = toMin(s.end) - toMin(s.start);
+  const seg = document.createElement('div');
+  seg.className = 'seg';
+  seg.style.flex = dur;
+  seg.dataset.id = s.id;
+  seg.title = `${s.label} · ${s.start}–${s.end} IST`;
+  timelineTrack.appendChild(seg);
+
+  const card = document.createElement('div');
+  card.className = 'phase-card';
+  card.dataset.id = s.id;
+  card.innerHTML = `
+    <div class="phase-card-icon">${SESSION_ICON[s.id] || '•'}</div>
+    <div>
+      <div class="phase-card-label">${s.label}</div>
+      <div class="phase-card-time mono">${s.start} – ${s.end}</div>
+    </div>
+    <div class="phase-card-state"></div>
+  `;
+  phaseStrip.appendChild(card);
+});
+const nowMarker = document.createElement('div');
+nowMarker.className = 'now-marker';
+timelineTrack.appendChild(nowMarker);
+
+let lastSessionId = null;
+let muted = false;
+function speak(text){
+  if(muted) return;
+  if('speechSynthesis' in window){
+    try{ const u = new SpeechSynthesisUtterance(text); u.rate = 1; window.speechSynthesis.speak(u); }catch(e){}
+  }
+}
+function pushLog(text){
+  const row = document.createElement('div');
+  row.className = 'log-row';
+  const t = getISTParts();
+  row.innerHTML = `<span class="t mono">${String(t.hour).padStart(2,'0')}:${String(t.minute).padStart(2,'0')}:${String(t.second).padStart(2,'0')}</span>${text}`;
+  document.getElementById('logRows').prepend(row);
+}
+pushLog('Normal market is now open. (demo seed entry)');
+
+function updateSchedule(){
+  const parts = getISTParts();
+  const nowMin = parts.hour*60 + parts.minute;
+  const sess = currentSession(nowMin, parts.weekday);
+
+  document.getElementById('phaseNow').textContent = sess.label;
+  document.getElementById('sessionChipText').textContent = sess.label;
+  document.getElementById('phaseLabelSmall').textContent = sess.label;
+
+  // countdown to next boundary
+  let nextLabel = '—';
+  const upcoming = SESSIONS.find(s => toMin(s.start) > nowMin);
+  if(nowMin < SESSION_START){ nextLabel = `Pre-open opens at 09:00 IST`; }
+  else if(upcoming){ const mins = toMin(upcoming.start) - nowMin; nextLabel = `${upcoming.label} in ${mins} min`; }
+  else if(nowMin < SESSION_END){ nextLabel = `Market closes at 16:15 IST`; }
+  else { nextLabel = `Next pre-open at 09:00 IST tomorrow`; }
+  document.getElementById('phaseCountdown').innerHTML = nextLabel.replace(/(\d+ min|\d{2}:\d{2} IST)/, '<b>$1</b>');
+
+  SESSIONS.forEach(s => {
+    const state = toMin(s.end) <= nowMin ? 'done' : (s.id === sess.id ? 'current' : '');
+    document.querySelector(`.seg[data-id="${s.id}"]`).className = 'seg ' + state;
+    document.querySelector(`.phase-card[data-id="${s.id}"]`).className = 'phase-card ' + state;
+  });
+  const pct = Math.min(100, Math.max(0, ((nowMin - SESSION_START)/totalWindow)*100));
+  nowMarker.style.left = pct + '%';
+  nowMarker.style.display = (nowMin >= SESSION_START && nowMin <= SESSION_END) ? 'block' : 'none';
+
+  if(lastSessionId !== null && lastSessionId !== sess.id && sess.voice){
+    speak(sess.voice);
+    pushLog(sess.voice);
+  }
+  lastSessionId = sess.id;
+  window.__currentVoice = sess.voice || 'Market status update.';
+}
+
+/* ===================== ROSTER ===================== */
+const PERSONNEL = {
+  Morning: { window:'07:00 – 16:00', people:[
+    { name:'Aditi Rao', role:'Senior Support Engineer', gender:'f' },
+    { name:'Vikram Shah', role:'Support Engineer', gender:'m' },
+  ]},
+  Evening: { window:'14:00 – 23:00', people:[
+    { name:'Karan Mehta', role:'Support Engineer', gender:'m' },
+    { name:'Neha Verma', role:'Shift Lead', gender:'f' },
+  ]},
+  Night: { window:'23:00 – 08:00', people:[
+    { name:'Rahul Nair', role:'Support Engineer', gender:'m' },
+    { name:'Priya Iyer', role:'Senior Support Engineer', gender:'f' },
+  ]},
+};
+const SHIFT_RANGES = {
+  Morning: [7*60, 16*60],
+  Evening: [14*60, 23*60],
+  Night:   [23*60, 32*60], // wraps past midnight, handled via modulo below
+};
+function inRange(nowMin, [s,e]){
+  const n2 = nowMin < s ? nowMin+1440 : nowMin; // handle wrap for night
+  return n2 >= s && n2 < e;
+}
+function dutyState(shiftName, nowMin){
+  const [s,e] = SHIFT_RANGES[shiftName];
+  if(inRange(nowMin,[s,e])) return 'on';
+  const upcomingStart = s > nowMin ? s : s+1440;
+  if(upcomingStart - nowMin <= 60) return 'up';
+  return 'off';
+}
+function isHandover(nowMin){
+  return (nowMin>=7*60 && nowMin<8*60) || (nowMin>=14*60 && nowMin<16*60);
+}
+// Single deterministic "current shift" for the roster ribbon and the Tasks tab's
+// auto-selected checklist. During a handover overlap more than one shift shows
+// ON DUTY (correctly — see isHandover) but the Tasks tab still needs one
+// primary tasklist to display, so priority order breaks the tie.
+const SHIFT_KEYS = ['Morning','Evening','Night'];
+function currentShiftName(nowMin){
+  for(const k of SHIFT_KEYS){ if(dutyState(k, nowMin)==='on') return k; }
+  return 'Morning';
+}
+
+const avatarSvg = (gender) => gender==='f'
+  ? `<svg viewBox="0 0 38 38"><circle cx="19" cy="19" r="19" fill="rgba(79,217,208,.12)"/><circle cx="19" cy="15" r="7" fill="#4FD9D0"/><path d="M6 34c0-8 6-13 13-13s13 5 13 13" fill="#4FD9D0" opacity=".55"/><path d="M11 12c0-6 4-9 8-9s8 3 8 9c0 2-1 3-1 3l-1-4-4 2-4-2-4 2-1-2z" fill="#0B0E14" opacity=".35"/></svg>`
+  : `<svg viewBox="0 0 38 38"><circle cx="19" cy="19" r="19" fill="rgba(255,176,32,.12)"/><circle cx="19" cy="15" r="7" fill="#FFB020"/><path d="M6 34c0-8 6-13 13-13s13 5 13 13" fill="#FFB020" opacity=".55"/><path d="M12 11c2-3 5-3 7-3s5 0 7 3c0-4-3-7-7-7s-7 3-7 7z" fill="#0B0E14" opacity=".35"/></svg>`;
+
+const rosterGrid = document.getElementById('rosterGrid');
+function renderRoster(nowMin){
+  rosterGrid.innerHTML = '';
+  const curShift = currentShiftName(nowMin);
+  Object.entries(PERSONNEL).forEach(([shiftName, data]) => {
+    const state = dutyState(shiftName, nowMin);
+    const col = document.createElement('div');
+    col.className = 'shift-col panel' + (shiftName === curShift ? ' current-shift' : '');
+    col.innerHTML = `
+      <div class="shift-head">
+        <span class="shift-name">${shiftName}</span>
+        <span class="shift-window mono">${data.window}</span>
+      </div>
+      ${shiftName === curShift ? '<div class="current-shift-ribbon">Current shift</div>' : ''}
+      ${isHandover(nowMin) && state==='on' ? '<div class="handover-ribbon">Handover in progress</div>' : ''}
+      ${data.people.map(p => `
+        <div class="person">
+          <div class="avatar">${avatarSvg(p.gender)}</div>
+          <div class="person-info">
+            <div class="person-name">${p.name}</div>
+            <div class="person-role">${p.role}</div>
+          </div>
+          <span class="duty-pill ${state}">${state==='on'?'ON DUTY':state==='up'?'UPCOMING':'OFF'}</span>
+        </div>
+      `).join('')}
+    `;
+    rosterGrid.appendChild(col);
+  });
+
+  // mini "on duty now" for Overview
+  const onNow = [];
+  Object.entries(PERSONNEL).forEach(([shiftName,data]) => {
+    if(dutyState(shiftName,nowMin)==='on') data.people.forEach(p => onNow.push(p));
+  });
+  const mini = document.getElementById('onDutyMini');
+  mini.innerHTML = onNow.length ? onNow.map(p => `
+    <div class="mini-row"><span class="pip on"></span>${p.name} <span style="color:var(--text-lo);margin-left:auto;">${p.role}</span></div>
+  `).join('') : `<div class="mini-row"><span class="pip off"></span>No shift active</div>`;
+}
+
+/* ===================== TASKS + RBAC (three shift-scoped checklists) =====================
+   Each shift (Morning / Evening / Night) has its own checklist. The Tasks tab
+   auto-selects whichever shift is currently on duty (reusing currentShiftName()
+   from the roster module) and re-renders live as shifts change — mirroring
+   the "shift rota is dynamically shown" ask. A manual tab click pins a shift
+   for browsing; the "AUTO" pill returns to following the live shift.
+
+   Completion writes: in the real system, PATCH /api/tasks/:id stamps
+   completed_by/completed_at server-side and appends an event to MongoDB
+   (`task_completion_events` — see Design Doc §9.5). This demo has no backend,
+   so recordCompletionEvent() below simulates that write into an in-memory
+   auditLog array and logs it to the console instead. */
+const ROLES = ['L1 Support','L2 Support','Shift Lead','Admin'];
+const PERSONAS = [
+  { role:'L1 Support', name:'Vikram Shah' },
+  { role:'L2 Support', name:'Karan Mehta' },
+  { role:'Shift Lead',  name:'Neha Verma' },
+  { role:'Admin',       name:'Rahul Nair' },
+];
+let currentPersona = PERSONAS[0];
+const auditLog = []; // stand-in for the MongoDB task_completion_events collection
+
+const SHIFT_CHECKLISTS = {
+  Morning: [
+    { id:'M1', process:'Confirm pre-open feed handshake with vendor', desc:'Verify NEATPlus feed connectivity before order collection opens.', time:'08:45–09:00', mode:'Manual', executor:'Vendor Ops', role:'L1 Support', priority:'critical', status:'in_progress' },
+    { id:'M2', process:'Reconcile BOD margin report exceptions', desc:'Review beginning-of-day exceptions flagged by risk.', time:'07:30', mode:'Manual', executor:'Risk Desk', role:'L2 Support', priority:'high', status:'completed', completedBy:'Karan Mehta', completedAt:'07:42:10' },
+    { id:'M3', process:'Acknowledge CAS transition alert in monitoring', desc:'Confirm the closing auction session alert fired and was actioned.', time:'15:15–15:35', mode:'Manual', executor:'Monitoring', role:'L1 Support', priority:'medium', status:'open' },
+  ],
+  // Pasted verbatim from the ops runbook's "Evening" checklist. Times/executors
+  // were reconstructed from a flattened paste of the source table — flagged
+  // rows worth a quick sanity check against the runbook before this goes live.
+  Evening: [
+    { id:'E1',  process:'Pulse Trade file process for FNO & CM', time:'3:31 / 3:35', mode:'Auto', executor:'ControlM', role:'L1 Support', priority:'low', status:'open' },
+    { id:'E2',  process:'TBT-Data Validation & Comparison', time:'03:30–04:00', mode:'Auto', executor:'ControlM', role:'L1 Support', priority:'low', status:'open' },
+    { id:'E3',  process:'OTA reports', time:'03:45–04:15', mode:'Auto', executor:'ControlM', role:'L1 Support', priority:'low', status:'open' },
+    { id:'E4',  process:'Latency Report', time:'03:35–03:40', mode:'Auto', executor:'ControlM', role:'L1 Support', priority:'low', status:'open' },
+    { id:'E5',  process:'TBT File copy process', time:'04:05–04:30', mode:'Auto', executor:'ControlM', role:'L1 Support', priority:'low', status:'open' },
+    { id:'E6',  process:'Trade file process for CD', time:'5:15', mode:'Auto', executor:'ControlM', role:'L1 Support', priority:'low', status:'open' },
+    { id:'E7',  process:'Span file download', time:'5:30', mode:'Auto', executor:'File Downloader', role:'L1 Support', priority:'low', status:'open' },
+    { id:'E8',  process:'Inhouse EOD', time:'8:15', mode:'Auto', executor:'ControlM', role:'L1 Support', priority:'medium', status:'open' },
+    { id:'E9',  process:'NSE Stream ID Mail', time:'10:00', mode:'Auto/Manual', executor:'—', role:'L1 Support', priority:'medium', status:'open' },
+    { id:'E10', process:'BSE Stream ID Mail', time:'10:00', mode:'Auto/Manual', executor:'—', role:'L1 Support', priority:'medium', status:'open' },
+    { id:'E11', process:'Exchange file download (evening)', time:'8:00', mode:'Auto', executor:'File Downloader', role:'L1 Support', priority:'low', status:'open' },
+    { id:'E12', process:'Sub2 HFT Token activity', time:'8:10', mode:'Auto', executor:'ControlM', role:'L1 Support', priority:'low', status:'open' },
+    { id:'E13', process:'Commvault backup for ML', time:'8:20', mode:'Auto', executor:'ControlM', role:'L1 Support', priority:'low', status:'open' },
+    { id:'E14', process:'Commvault backup for GP', time:'8:20', mode:'Auto', executor:'ControlM', role:'L1 Support', priority:'low', status:'open' },
+    { id:'E15', process:'Commvault backup for FES', time:'8:20', mode:'Auto', executor:'ControlM', role:'L1 Support', priority:'low', status:'open' },
+    { id:'E16', process:'Commvault backup for CORMS', time:'8:20', mode:'Auto', executor:'ControlM', role:'L1 Support', priority:'low', status:'open' },
+    { id:'E17', process:'Commvault backup for CONREV', time:'8:20', mode:'Auto', executor:'ControlM', role:'L1 Support', priority:'low', status:'open' },
+    { id:'E18', process:'Greeksoft EOD Check', time:'10:10', mode:'Auto', executor:'ControlM', role:'L1 Support', priority:'medium', status:'open' },
+    { id:'E19', process:'Inhouse Token activity', time:'10:15', mode:'Auto', executor:'ControlM', role:'L1 Support', priority:'low', status:'open' },
+    { id:'E20', process:'Check Audit mail', time:'10:30', mode:'Manual', executor:'EOD Team', role:'L2 Support', priority:'medium', status:'open' },
+    { id:'E21', process:'Sub2 EOD check', time:'10:30', mode:'Auto', executor:'Auto', role:'L1 Support', priority:'medium', status:'open' },
+    { id:'E22', process:'Mail check & reply & forwarding', time:'—', mode:'Partial Auto', executor:'—', role:'L1 Support', priority:'low', status:'open' },
+    { id:'E23', process:'Control-M Dashboard Monitoring', time:'—', mode:'Auto', executor:'ControlM', role:'L1 Support', priority:'medium', status:'open' },
+    { id:'E24', process:'Deployment (SUB2, Inhouse, TBT Adaptor, Greeksoft, FM)', time:'—', mode:'Manual', executor:'—', role:'Shift Lead', priority:'high', status:'open' },
+    { id:'E25', process:'Start FM Converge EOD', time:'As per mail', mode:'Manual', executor:'—', role:'Shift Lead', priority:'medium', status:'open' },
+    { id:'E26', process:'SUB2 Password Change', time:'Thursday', mode:'Auto', executor:'—', role:'Admin', priority:'high', status:'open' },
+    { id:'E27', process:'INHOUSE Password Change', time:'Wednesday', mode:'Auto', executor:'—', role:'Admin', priority:'high', status:'open' },
+    { id:'E28', process:'Greeksoft Password change (EQ/FO/CD)', time:'Wednesday', mode:'Manual', executor:'—', role:'Admin', priority:'high', status:'open' },
+  ],
+  Night: [
+    { id:'N1', process:'Verify EOD settlement file received from NSE', desc:'Check settlement file drop against expected schedule.', time:'23:30', mode:'Manual', executor:'NSE Settlement', role:'L2 Support', priority:'high', status:'open' },
+    { id:'N2', process:'Sign off shift handover checklist', desc:'Confirm outgoing shift has closed all open items before handover.', time:'07:00–08:00', mode:'Manual', executor:'Shift Lead', role:'Shift Lead', priority:'medium', status:'open' },
+    { id:'N3', process:'Roll over holiday calendar for next quarter', desc:'Import updated NSE trading holiday list into schedule config.', time:'As needed', mode:'Manual', executor:'Admin', role:'Admin', priority:'low', status:'open' },
+  ],
+};
+
+const personaSelect = document.getElementById('personaSelect');
+PERSONAS.forEach((p,i) => {
+  const opt = document.createElement('option');
+  opt.value = i; opt.textContent = `${p.name} — ${p.role}`;
+  personaSelect.appendChild(opt);
+});
+personaSelect.onchange = () => { currentPersona = PERSONAS[+personaSelect.value]; renderChecklist(selectedShift); };
+
+function canAct(row){
+  if(row.status === 'completed') return false;
+  return row.role === currentPersona.role || currentPersona.role === 'Shift Lead' || currentPersona.role === 'Admin';
+}
+function nextStatus(s){ return s==='open' ? 'in_progress' : 'completed'; }
+function statusLabel(s){ return s==='open' ? 'Open' : s==='in_progress' ? 'In Progress' : 'Completed'; }
+
+function recordCompletionEvent(row, shiftKey){
+  const evt = {
+    taskId: row.id, shift: shiftKey, process: row.process,
+    completedBy: currentPersona.name, role: currentPersona.role,
+    completedAt: new Date().toISOString(),
+  };
+  auditLog.push(evt);
+  // TODO(backend): POST /api/tasks/:id { status:'completed' } → ops-api stamps
+  // completed_by/completed_at and writes this event to MongoDB.
+  console.log('[audit → mongo task_completion_events]', evt);
+}
+
+let selectedShift = null, shiftAutoFollow = true;
+const shiftTabbar = document.getElementById('shiftTabbar');
+const SHIFT_WINDOWS = { Morning:'07:00–16:00', Evening:'14:00–23:00', Night:'23:00–08:00' };
+SHIFT_KEYS.forEach(k => {
+  const btn = document.createElement('button');
+  btn.className = 'shift-tab'; btn.dataset.shift = k;
+  btn.innerHTML = `${k} <span class="shift-tab-window mono">${SHIFT_WINDOWS[k]}</span>`;
+  btn.onclick = () => { selectedShift = k; shiftAutoFollow = false; renderChecklist(k); updateShiftTabUI(); };
+  shiftTabbar.appendChild(btn);
+});
+const autoShiftBtn = document.createElement('button');
+autoShiftBtn.className = 'auto-pill active'; autoShiftBtn.id = 'shiftAutoBtn';
+autoShiftBtn.title = 'Follow the live shift automatically'; autoShiftBtn.textContent = '⟳ AUTO';
+autoShiftBtn.onclick = () => { shiftAutoFollow = true; renderChecklist(selectedShift); updateShiftTabUI(); };
+shiftTabbar.appendChild(autoShiftBtn);
+
+function updateShiftTabUI(curShift){
+  document.querySelectorAll('.shift-tab').forEach(btn => {
+    btn.classList.toggle('active', btn.dataset.shift === selectedShift);
+    btn.classList.toggle('is-current', curShift && btn.dataset.shift === curShift);
+  });
+  autoShiftBtn.classList.toggle('active', shiftAutoFollow);
+}
+
+const taskList = document.getElementById('taskList');
+function renderChecklist(shiftKey){
+  const rows = SHIFT_CHECKLISTS[shiftKey];
+  taskList.innerHTML = '';
+  const table = document.createElement('div');
+  table.className = 'checklist-table';
+  const head = document.createElement('div');
+  head.className = 'checklist-head';
+  head.innerHTML = `<div>Process</div><div>Time</div><div>Mode</div><div>Maker / Executor</div><div>Status</div>`;
+  table.appendChild(head);
+
+  rows.forEach(row => {
+    const allowed = canAct(row);
+    const rowEl = document.createElement('div');
+    rowEl.className = 'checklist-row panel';
+    rowEl.innerHTML = `
+      <div class="cl-process">
+        <span class="prio ${row.priority}">${row.priority.toUpperCase()}</span>${row.process}
+        ${row.desc ? `<div class="cl-desc">${row.desc}</div>` : ''}
+        ${row.status==='completed' ? `<div class="completed-note">Completed by ${row.completedBy} at ${row.completedAt}</div>` : ''}
+      </div>
+      <div class="cl-time mono">${row.time}</div>
+      <div class="cl-mode">${row.mode}</div>
+      <div class="cl-exec">${row.executor}<span class="role-badge">${row.role}</span></div>
+      <button class="status-pill ${row.status} ${allowed?'':'disabled'}" data-id="${row.id}"
+        title="${allowed ? 'Click to advance status' : 'Requires '+row.role+' (or a Shift Lead / Admin)'}">
+        ${statusLabel(row.status)}
+      </button>
+    `;
+    table.appendChild(rowEl);
+  });
+  taskList.appendChild(table);
+
+  table.querySelectorAll('.status-pill').forEach(btn => {
+    btn.onclick = () => {
+      const row = rows.find(r => r.id === btn.dataset.id);
+      if(!canAct(row)) { btn.animate([{transform:'translateX(0)'},{transform:'translateX(-4px)'},{transform:'translateX(4px)'},{transform:'translateX(0)'}], {duration:220}); return; }
+      row.status = nextStatus(row.status);
+      if(row.status === 'completed'){
+        const t = getISTParts();
+        row.completedBy = currentPersona.name;
+        row.completedAt = `${String(t.hour).padStart(2,'0')}:${String(t.minute).padStart(2,'0')}:${String(t.second).padStart(2,'0')}`;
+        recordCompletionEvent(row, shiftKey);
+      }
+      renderChecklist(shiftKey);
+      const flashEl = document.querySelector(`.status-pill[data-id="${row.id}"]`);
+      if(flashEl) flashEl.classList.add('flash');
+    };
+  });
+}
+function renderTaskSnapshot(shiftKey){
+  const rows = SHIFT_CHECKLISTS[shiftKey || selectedShift || 'Morning'];
+  const counts = { open:0, in_progress:0, completed:0 };
+  rows.forEach(t => counts[t.status]++);
+  document.getElementById('taskSnapshot').innerHTML = `
+    <div style="font-size:10px;color:var(--text-lo);letter-spacing:.03em;margin-bottom:8px;">LIVE · ${(shiftKey||selectedShift)} shift</div>
+    <div class="mini-row"><span class="pip off"></span>Open <span style="margin-left:auto;">${counts.open}</span></div>
+    <div class="mini-row"><span class="pip on" style="background:var(--cyan)"></span>In Progress <span style="margin-left:auto;">${counts.in_progress}</span></div>
+    <div class="mini-row"><span class="pip on"></span>Completed <span style="margin-left:auto;">${counts.completed}</span></div>
+  `;
+}
+
+/* ===================== TABS ===================== */
+document.querySelectorAll('.tab').forEach(tab => {
+  tab.onclick = () => {
+    document.querySelectorAll('.tab').forEach(t=>t.classList.remove('active'));
+    document.querySelectorAll('.view').forEach(v=>v.classList.remove('active'));
+    tab.classList.add('active');
+    document.getElementById('view-'+tab.dataset.tab).classList.add('active');
+  };
+});
+
+/* ===================== MUTE ===================== */
+function toggleMute(){
+  muted = !muted;
+  document.getElementById('muteBtn').textContent = muted ? '🔇' : '🔊';
+  document.getElementById('muteBtn2').textContent = muted ? '🔇' : '🔊';
+}
+document.getElementById('muteBtn').onclick = toggleMute;
+document.getElementById('muteBtn2').onclick = toggleMute;
+document.getElementById('testVoiceBtn').onclick = () => speak(window.__currentVoice || 'Market status update.');
+
+/* ===================== MAIN LOOP ===================== */
+function tickClocks(){
+  const p = getISTParts();
+  const hh = String(p.hour).padStart(2,'0'), mm = String(p.minute).padStart(2,'0'), ss = String(p.second).padStart(2,'0');
+  document.getElementById('headerClock').textContent = `${hh}:${mm}:${ss}`;
+  const dateStr = `${p.weekday}, ${String(p.day).padStart(2,'0')}/${String(p.month).padStart(2,'0')}/${p.year} IST`;
+  document.getElementById('headerDate').textContent = dateStr;
+
+  const secDeg = p.second*6, minDeg = p.minute*6 + p.second*0.1, hourDeg = (p.hour%12)*30 + p.minute*0.5;
+  hHand.setAttribute('transform', `rotate(${hourDeg} 75 75)`);
+  mHand.setAttribute('transform', `rotate(${minDeg} 75 75)`);
+  sHand.setAttribute('transform', `rotate(${secDeg} 75 75)`);
+
+  const nowMin = p.hour*60 + p.minute;
+  updateSchedule();
+  updateClockBook();
+  renderRoster(nowMin);
+
+  const curShift = currentShiftName(nowMin);
+  if(selectedShift === null || (shiftAutoFollow && selectedShift !== curShift)){
+    selectedShift = curShift;
+    renderChecklist(selectedShift);
+  }
+  updateShiftTabUI(curShift);
+  renderTaskSnapshot(curShift);
+}
+
+renderSky(currentElevation());
+tickClocks();
+setInterval(tickClocks, 1000);
+setInterval(tickSymbols, 2000);
+setInterval(() => { if(!previewMode) renderSky(currentElevation()); }, 60000);
+</script>
+</body>
+</html>

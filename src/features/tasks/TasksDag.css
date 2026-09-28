@@ -1,0 +1,451 @@
+/* =========================================================
+   MERIDIAN — Dynamic Tasks DAG Flowchart
+   Infinite Draggable Canvas (Excalidraw-like) & Hierarchical Layout
+   ========================================================= */
+
+/* Parent section wrapper height override */
+#view-tasks {
+  display: flex !important;
+  flex-direction: column !important;
+  min-height: calc(100vh - 130px) !important;
+  height: calc(100vh - 130px) !important;
+}
+
+.tasks-dag-container {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  flex: 1;
+  min-height: 460px;
+  height: calc(100vh - 230px);
+  position: relative;
+  overflow: hidden;
+  background: #040711;
+  border-radius: var(--radius);
+  border: 1px solid var(--panel-border);
+  z-index: 5;
+}
+
+/* --- Canvas Toolbar & Metrics Bar --- */
+.dag-metrics-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 18px;
+  background: rgba(7, 11, 20, 0.94);
+  backdrop-filter: blur(12px);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  font-size: 12px;
+  z-index: 6;
+  flex-shrink: 0;
+}
+
+.dag-legend {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.legend-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--text-lo);
+  font-size: 11px;
+}
+
+.legend-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+}
+
+.legend-dot.completed {
+  background: var(--green);
+  box-shadow: 0 0 8px rgba(51, 209, 122, 0.6);
+}
+
+.legend-dot.ready {
+  background: var(--cyan);
+  box-shadow: 0 0 8px rgba(79, 217, 208, 0.6);
+}
+
+.legend-dot.in_progress {
+  background: var(--cyan);
+  animation: pulse-glow 1.5s infinite;
+}
+
+.legend-dot.blocked {
+  background: var(--amber);
+  box-shadow: 0 0 8px rgba(255, 176, 32, 0.6);
+}
+
+.dag-controls {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+/* Pan & Zoom Toolbar Group */
+.canvas-pan-controls {
+  display: flex;
+  align-items: center;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 6px;
+  padding: 2px 4px;
+  gap: 4px;
+}
+
+.canvas-tool-btn {
+  padding: 3px 8px;
+  border-radius: 4px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-hi);
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid transparent;
+  transition: all 0.15s ease;
+}
+
+.canvas-tool-btn:hover {
+  background: rgba(255, 255, 255, 0.12);
+  border-color: rgba(255, 255, 255, 0.2);
+}
+
+.zoom-level {
+  font-size: 11px;
+  color: var(--text-lo);
+  min-width: 36px;
+  text-align: center;
+}
+
+.dag-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--text-hi);
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  transition: all 0.2s ease;
+}
+
+.dag-btn:hover {
+  background: rgba(255, 255, 255, 0.12);
+  border-color: rgba(255, 255, 255, 0.24);
+  transform: translateY(-1px);
+}
+
+.dag-btn.active {
+  background: rgba(79, 217, 208, 0.15);
+  border-color: var(--cyan);
+  color: var(--cyan);
+  box-shadow: 0 0 10px rgba(79, 217, 208, 0.25);
+}
+
+.dag-btn.primary {
+  background: linear-gradient(135deg, rgba(79, 217, 208, 0.25) 0%, rgba(30, 90, 120, 0.4) 100%);
+  border-color: var(--cyan);
+  color: #fff;
+}
+
+/* --- Infinite Draggable Canvas Viewport (Excalidraw feel) --- */
+.dag-infinite-viewport {
+  position: relative;
+  flex: 1;
+  width: 100%;
+  height: 100%;
+  min-height: 440px;
+  overflow: hidden;
+  cursor: grab;
+  user-select: none;
+  background-color: #040711;
+  background-image: radial-gradient(rgba(255, 255, 255, 0.09) 1.2px, transparent 1.2px);
+  background-size: 28px 28px;
+}
+
+.dag-infinite-viewport.is-dragging {
+  cursor: grabbing !important;
+}
+
+.canvas-pan-hint {
+  position: absolute;
+  bottom: 14px;
+  right: 18px;
+  font-size: 11px;
+  color: var(--text-lo);
+  background: rgba(8, 12, 22, 0.85);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  padding: 5px 12px;
+  border-radius: 6px;
+  pointer-events: none;
+  z-index: 25;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5);
+}
+
+/* --- Transformed Canvas Plane --- */
+.dag-canvas-plane {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 2300px;
+  height: 1000px;
+  will-change: transform;
+}
+
+/* Pipeline Track Headers at the top */
+.track-headers-layer {
+  position: absolute;
+  top: 14px;
+  left: 0;
+  width: 100%;
+  height: 40px;
+  pointer-events: none;
+  z-index: 1;
+}
+
+.pipeline-track-header {
+  position: absolute;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--cyan);
+  background: rgba(10, 16, 28, 0.88);
+  border: 1px solid rgba(79, 217, 208, 0.25);
+  padding: 4px 12px;
+  border-radius: 6px;
+  backdrop-filter: blur(8px);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
+}
+
+.track-header-icon {
+  font-size: 13px;
+}
+
+/* --- Streamlined Task Node Card --- */
+.task-node-card {
+  position: absolute;
+  background: rgba(12, 17, 30, 0.94);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 10px;
+  padding: 12px 14px;
+  width: 250px;
+  min-height: 80px;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  transition: opacity 0.2s ease, filter 0.2s ease, transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease;
+  cursor: pointer;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.6);
+  z-index: 3;
+}
+
+.task-node-card:hover {
+  transform: translateY(-3px);
+  border-color: rgba(255, 255, 255, 0.35);
+  box-shadow: 0 12px 28px rgba(0, 0, 0, 0.8);
+}
+
+/* Hover Dimming & Highlighting */
+.task-node-card.dimmed {
+  opacity: 0.14 !important;
+  filter: grayscale(85%) blur(0.5px);
+  transform: scale(0.97);
+  box-shadow: none !important;
+}
+
+.task-node-card.hovered {
+  transform: translateY(-4px) scale(1.03);
+  border-color: var(--cyan) !important;
+  box-shadow: 0 14px 32px rgba(0, 0, 0, 0.9), 0 0 24px rgba(79, 217, 208, 0.45) !important;
+  z-index: 15;
+}
+
+.task-node-card.related {
+  border-color: rgba(255, 255, 255, 0.45) !important;
+  box-shadow: 0 10px 24px rgba(0, 0, 0, 0.7), 0 0 14px rgba(255, 255, 255, 0.25) !important;
+  z-index: 12;
+}
+
+.task-node-card.selected {
+  border-color: var(--cyan);
+  box-shadow: 0 0 18px rgba(79, 217, 208, 0.4);
+}
+
+/* Node Status Visual Variants */
+.task-node-card.status-completed {
+  border-color: rgba(51, 209, 122, 0.45);
+  background: linear-gradient(180deg, rgba(51, 209, 122, 0.08) 0%, rgba(12, 17, 30, 0.96) 100%);
+}
+
+.task-node-card.status-ready {
+  border-color: rgba(79, 217, 208, 0.45);
+  background: linear-gradient(180deg, rgba(79, 217, 208, 0.06) 0%, rgba(12, 17, 30, 0.96) 100%);
+}
+
+.task-node-card.status-blocked {
+  border-color: rgba(255, 176, 32, 0.5);
+  background: linear-gradient(180deg, rgba(255, 176, 32, 0.07) 0%, rgba(14, 18, 28, 0.96) 100%);
+}
+
+.node-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 6px;
+}
+
+.node-badge-group {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.node-id {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--text-lo);
+  letter-spacing: 0.04em;
+}
+
+.node-priority {
+  font-size: 9px;
+  font-weight: 700;
+  padding: 1px 4px;
+  border-radius: 3px;
+  text-transform: uppercase;
+}
+
+.node-priority.critical {
+  background: rgba(255, 77, 94, 0.2);
+  color: var(--red);
+  border: 1px solid rgba(255, 77, 94, 0.35);
+}
+
+.node-priority.high {
+  background: rgba(255, 159, 69, 0.2);
+  color: var(--orange);
+  border: 1px solid rgba(255, 159, 69, 0.35);
+}
+
+.node-priority.medium {
+  background: rgba(255, 176, 32, 0.2);
+  color: var(--amber);
+  border: 1px solid rgba(255, 176, 32, 0.35);
+}
+
+.node-priority.low {
+  background: rgba(255, 255, 255, 0.08);
+  color: var(--text-lo);
+}
+
+.node-time {
+  font-size: 11px;
+  color: var(--text-lo);
+}
+
+.node-title {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-hi);
+  line-height: 1.35;
+}
+
+/* Manifest Banner in M1 */
+.node-manifest-banner {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 6px 8px;
+  border-radius: 5px;
+  background: rgba(79, 217, 208, 0.08);
+  border: 1px solid rgba(79, 217, 208, 0.25);
+  margin-top: 6px;
+}
+
+.manifest-stats {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 10px;
+}
+
+.manifest-progress-bg {
+  width: 100%;
+  height: 3px;
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 2px;
+  overflow: hidden;
+}
+
+.manifest-progress-fill {
+  height: 100%;
+  background: linear-gradient(90deg, var(--cyan) 0%, var(--green) 100%);
+  border-radius: 2px;
+}
+
+/* Blocked Warning Chip */
+.node-blocked-chip {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 9px;
+  color: var(--amber);
+  background: rgba(255, 176, 32, 0.12);
+  border: 1px solid rgba(255, 176, 32, 0.3);
+  padding: 3px 6px;
+  border-radius: 4px;
+  margin-top: 6px;
+}
+
+/* --- SVG Connector Edges --- */
+.dag-svg-overlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  z-index: 2;
+}
+
+.dag-edge-path {
+  fill: none;
+  stroke-width: 2.2px;
+  transition: stroke 0.25s ease, opacity 0.25s ease, stroke-width 0.25s ease;
+}
+
+.dag-edge-path.flow-active {
+  stroke-dasharray: 8 6;
+  animation: flow-dash 1.2s linear infinite;
+}
+
+.dag-edge-path.hover-focused {
+  z-index: 10;
+}
+
+@keyframes flow-dash {
+  from {
+    stroke-dashoffset: 28;
+  }
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+
+@keyframes pulse-glow {
+  0%, 100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.45;
+  }
+}

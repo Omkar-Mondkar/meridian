@@ -1,0 +1,348 @@
+/* =========================================================
+   MERIDIAN — Design tokens
+   Source of truth for all colours, type scale, panel styles,
+   animations. All component CSS imports this file.
+   ========================================================= */
+
+/* ---------- Google Fonts (also loaded in index.html for perf) ---------- */
+@import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600;700&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap');
+
+/* ---------- CSS Custom Properties ---------- */
+:root {
+  --void: #06090F;
+  --panel: rgba(10, 14, 24, 0.84);
+  --panel-strong: rgba(7, 10, 18, 0.94);
+  --panel-border: rgba(255, 255, 255, 0.12);
+  --text-hi: #F2F5F9;
+  --text-lo: #A2B0C6;
+  --amber: #FFB020;
+  --cyan: #4FD9D0;
+  --green: #33D17A;
+  --red: #FF4D5E;
+  --orange: #FF9F45;
+  --radius: 14px;
+  --night-amount: 0;
+}
+
+/* ---------- Reset ---------- */
+*, *::before, *::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+html, body, #root {
+  height: 100%;
+}
+
+body {
+  font-family: 'IBM Plex Sans', system-ui, -apple-system, sans-serif;
+  color: var(--text-hi);
+  background: #02040A;
+  overflow: hidden;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+.mono {
+  font-family: 'IBM Plex Mono', ui-monospace, monospace;
+}
+
+button {
+  font-family: inherit;
+  cursor: pointer;
+  background: none;
+  border: none;
+}
+
+/* ---------- Sky Layer ---------- */
+.sky-bg {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  transition: background 90s linear;
+}
+.sky-bg.fast {
+  transition: background 0.35s ease;
+}
+
+/* Ambient Sky Scrim — soft, lightweight edge vignette */
+.sky-scrim {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  pointer-events: none;
+  background: linear-gradient(
+    180deg,
+    rgba(0, 0, 0, 0.12) 0%,
+    rgba(0, 0, 0, 0.02) 25%,
+    rgba(0, 0, 0, 0.02) 75%,
+    rgba(0, 0, 0, 0.10) 100%
+  );
+}
+
+/* ---------- Stars ---------- */
+.stars {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  pointer-events: none;
+  opacity: var(--night-amount);
+  transition: opacity 6s ease;
+}
+.star {
+  position: absolute;
+  width: 2px;
+  height: 2px;
+  border-radius: 50%;
+  background: #fff;
+}
+.star.tw {
+  animation: twinkle 3.2s ease-in-out infinite;
+}
+
+/* ---------- Sun / Moon ---------- */
+.sun-moon {
+  position: absolute;
+  right: 6%;
+  z-index: 1;
+  width: 42px;
+  height: 42px;
+  border-radius: 50%;
+  transition: top 90s linear, background 6s ease, box-shadow 6s ease;
+  pointer-events: none;
+}
+.sun-moon.fast {
+  transition: top 0.35s ease, background 0.35s ease, box-shadow 0.35s ease;
+}
+
+/* ---------- Glass Panel ---------- */
+.panel {
+  background: var(--panel);
+  border: 1px solid var(--panel-border);
+  border-radius: var(--radius);
+  backdrop-filter: blur(24px) saturate(160%);
+  -webkit-backdrop-filter: blur(24px) saturate(160%);
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.35);
+  transition:
+    transform 0.28s cubic-bezier(0.16, 1, 0.3, 1),
+    border-color 0.28s ease,
+    box-shadow 0.28s ease;
+}
+
+/* ---------- Chip ---------- */
+.chip {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  border-radius: 20px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.03em;
+  border: 1px solid var(--panel-border);
+  background: var(--panel-strong);
+  color: var(--text-hi);
+}
+.chip .dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--green);
+  flex-shrink: 0;
+}
+.chip.warn .dot {
+  background: var(--orange);
+}
+.chip.live-chip {
+  background: rgba(255, 77, 94, 0.18);
+  border-color: rgba(255, 77, 94, 0.45);
+  color: #FFA4AD;
+}
+.chip.live-chip .dot {
+  background: var(--red);
+  animation: pulseLive 1.8s ease-in-out infinite;
+}
+
+/* ---------- Icon Button ---------- */
+.icon-btn {
+  width: 34px;
+  height: 34px;
+  border-radius: 9px;
+  border: 1px solid var(--panel-border);
+  background: var(--panel-strong);
+  color: var(--text-hi);
+  font-size: 15px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+.icon-btn:hover {
+  border-color: var(--cyan);
+  background: rgba(79, 217, 208, 0.12);
+}
+
+/* ---------- General Button ---------- */
+.btn {
+  background: var(--panel-strong);
+  border: 1px solid var(--panel-border);
+  color: var(--text-hi);
+  padding: 9px 14px;
+  border-radius: 9px;
+  font-size: 12.5px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+.btn:hover {
+  border-color: var(--cyan);
+}
+.btn.primary {
+  background: var(--amber);
+  color: var(--void);
+  border-color: transparent;
+  font-weight: 700;
+}
+.btn.primary:hover {
+  opacity: 0.92;
+  box-shadow: 0 0 14px rgba(255, 176, 32, 0.35);
+}
+
+/* ---------- Duty Pill ---------- */
+.duty-pill {
+  font-size: 9.5px;
+  font-weight: 700;
+  padding: 3px 8px;
+  border-radius: 20px;
+  letter-spacing: 0.03em;
+  flex-shrink: 0;
+}
+.duty-pill.on {
+  background: rgba(51, 209, 122, 0.16);
+  color: #4EE293;
+  border: 1px solid rgba(51, 209, 122, 0.4);
+}
+.duty-pill.up {
+  background: rgba(79, 217, 208, 0.16);
+  color: #6EEAE2;
+  border: 1px solid rgba(79, 217, 208, 0.4);
+}
+.duty-pill.off {
+  background: rgba(162, 176, 198, 0.12);
+  color: var(--text-lo);
+  border: 1px solid var(--panel-border);
+}
+
+/* ---------- Priority Badge ---------- */
+.prio {
+  font-size: 9.5px;
+  font-weight: 700;
+  padding: 2px 7px;
+  border-radius: 5px;
+  letter-spacing: 0.03em;
+  margin-right: 6px;
+  display: inline-block;
+}
+.prio.low    { background: rgba(79, 217, 208, 0.16); color: var(--cyan); border: 1px solid rgba(79,217,208,0.3); }
+.prio.medium { background: rgba(255, 159, 69, 0.16); color: var(--orange); border: 1px solid rgba(255,159,69,0.3); }
+.prio.high   { background: rgba(255, 176, 32, 0.16); color: var(--amber); border: 1px solid rgba(255,176,32,0.3); }
+.prio.critical { background: rgba(255, 77, 94, 0.16); color: #FF7B88; border: 1px solid rgba(255,77,94,0.3); }
+
+/* ---------- Role Badge ---------- */
+.role-badge {
+  border: 1px solid var(--panel-border);
+  background: rgba(255, 255, 255, 0.04);
+  padding: 2px 7px;
+  border-radius: 5px;
+  font-size: 11px;
+  color: var(--text-lo);
+}
+
+/* ---------- Status Pill ---------- */
+.status-pill {
+  font-size: 11px;
+  font-weight: 700;
+  padding: 8px 14px;
+  border-radius: 20px;
+  border: 1px solid transparent;
+  letter-spacing: 0.03em;
+  flex-shrink: 0;
+  transition: transform 0.15s ease, background 0.2s ease;
+  cursor: pointer;
+}
+.status-pill.open {
+  background: rgba(162, 176, 198, 0.16);
+  color: var(--text-lo);
+  border-color: var(--panel-border);
+}
+.status-pill.in_progress {
+  background: rgba(79, 217, 208, 0.18);
+  color: var(--cyan);
+  border-color: rgba(79, 217, 208, 0.4);
+}
+.status-pill.completed {
+  background: rgba(51, 209, 122, 0.18);
+  color: #4EE293;
+  border-color: rgba(51, 209, 122, 0.4);
+}
+.status-pill:not(.disabled):hover {
+  transform: scale(1.04);
+}
+.status-pill.disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+.status-pill.flash {
+  animation: flash 0.5s ease;
+}
+
+/* ---------- Pip ---------- */
+.pip {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+.pip.on  { background: var(--green); box-shadow: 0 0 6px var(--green); }
+.pip.off { background: var(--text-lo); }
+
+/* ---------- Keyframe Animations ---------- */
+@keyframes twinkle {
+  0%, 100% { opacity: 0.25; }
+  50% { opacity: 1; }
+}
+
+@keyframes pulseLive {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.55; }
+}
+
+@keyframes markerPulse {
+  0%, 100% { transform: translateX(-50%) scale(1); }
+  50% { transform: translateX(-50%) scale(1.25); }
+}
+
+@keyframes phasePulse {
+  0%, 100% { box-shadow: 0 0 0 1px rgba(255,176,32,0.2), 0 0 18px rgba(255,176,32,0.16); }
+  50% { box-shadow: 0 0 0 1px rgba(255,176,32,0.4), 0 0 28px rgba(255,176,32,0.28); }
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(4px); }
+  to { opacity: 1; transform: none; }
+}
+
+@keyframes flash {
+  0% { box-shadow: 0 0 0 0 rgba(51,209,122,0.6); }
+  100% { box-shadow: 0 0 0 12px rgba(51,209,122,0); }
+}
+
+/* ---------- Reduced Motion ---------- */
+@media (prefers-reduced-motion: reduce) {
+  .star.tw { animation: none; opacity: 0.6; }
+  .chip.live-chip .dot { animation: none; }
+  .status-pill { transition: none; }
+  .sky-bg, .sun-moon { transition: none !important; }
+}
