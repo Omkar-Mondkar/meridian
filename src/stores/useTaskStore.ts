@@ -2,6 +2,7 @@
  * useTaskStore — Task/checklist state with RBAC linked to Roster.
  * Enhanced with DAG dependency management, live flowchart tracking,
  * Exchange File Manifest inspection, and manual override capabilities.
+ * Synchronized in real-time over WebSockets with MongoDB persistence.
  */
 import { create } from "zustand";
 import {
@@ -16,6 +17,12 @@ import {
   DEFAULT_TASK_PERSONA,
   type Persona,
 } from "../data/personas";
+import {
+  syncClient,
+  type SyncConnectionStatus,
+  type SyncDbMode,
+  type SyncInitPayload,
+} from "../lib/syncClient";
 
 export interface AuditEvent {
   taskId: string;
@@ -36,6 +43,10 @@ interface TaskState {
   shiftAutoFollow: boolean;
   currentPersona: Persona;
   auditLog: AuditEvent[];
+
+  // Connectivity & Backend Sync
+  syncStatus: SyncConnectionStatus;
+  dbMode: SyncDbMode;
 
   // Flowchart & DAG State
   viewMode: ViewMode;
@@ -86,6 +97,9 @@ export const useTaskStore = create<TaskState>((set, get) => ({
   shiftAutoFollow: true,
   currentPersona: DEFAULT_TASK_PERSONA,
   auditLog: [],
+
+  syncStatus: syncClient.getStatus(),
+  dbMode: syncClient.getDbMode(),
 
   viewMode: "graph",
   editMode: false,
@@ -197,11 +211,13 @@ export const useTaskStore = create<TaskState>((set, get) => ({
         action: "advance_status",
       };
 
-      console.log("[audit → mongo task_completion_events]", event);
-      set((s) => ({ checklists, auditLog: [...s.auditLog, event] }));
+      set((s) => ({ checklists, auditLog: [event, ...s.auditLog] }));
     } else {
       set({ checklists });
     }
+
+    // Broadcast change to server & other active screens
+    syncClient.sendTaskUpdate(row.id, nextStatus, personaName, `Advanced by ${personaName} (${personaRole})`);
   },
 
   setTaskStatusToOk: (shiftKey, taskId, personaName, personaRole, reason) => {
@@ -238,6 +254,7 @@ export const useTaskStore = create<TaskState>((set, get) => ({
       row.fileManifest.failedCount = 0;
     }
 
+    const effectiveReason = reason || "Manual operational sign-off by Shift Operator";
     const event: AuditEvent = {
       taskId: row.id,
       shift: shiftKey,
@@ -246,11 +263,13 @@ export const useTaskStore = create<TaskState>((set, get) => ({
       role: personaRole,
       completedAt: now.toISOString(),
       action: "manual_set_to_ok",
-      reason: reason || "Manual operational sign-off by Shift Operator",
+      reason: effectiveReason,
     };
 
-    console.log("[audit → mongo manual_set_to_ok]", event);
-    set((s) => ({ checklists, auditLog: [...s.auditLog, event] }));
+    set((s) => ({ checklists, auditLog: [event, ...s.auditLog] }));
+
+    // Broadcast manual override to server & other active screens
+    syncClient.sendTaskOverride(row.id, personaName, effectiveReason);
   },
 
   addCustomTaskNode: (shiftKey, item) => {
@@ -280,9 +299,12 @@ export const useTaskStore = create<TaskState>((set, get) => ({
 
     set((s) => ({
       checklists,
-      auditLog: [...s.auditLog, event],
+      auditLog: [event, ...s.auditLog],
       nodeBuilderOpen: false,
     }));
+
+    // Broadcast node creation to server & other active screens
+    syncClient.sendNodeCreate(newItem);
   },
 
   updateExchangeFileStatus: (fileId, status) => {
@@ -305,3 +327,142 @@ export const useTaskStore = create<TaskState>((set, get) => ({
     set({ checklists });
   },
 }));
+
+// Wire real-time WebSocket subscriber
+syncClient.subscribe((event) => {
+  if (event.type === "STATUS_CHANGE") {
+    useTaskStore.setState({
+      syncStatus: event.data.status,
+      dbMode: event.data.dbMode,
+    });
+  } else if (event.type === "SYNC_INIT") {
+    const payload = event.data as SyncInitPayload;
+    if (!payload) return;
+
+    const checklists = structuredClone(useTaskStore.getState().checklists);
+
+    // Apply remote task states
+    if (payload.tasks) {
+      for (const shift of Object.keys(checklists)) {
+        for (const item of checklists[shift]) {
+          const remote = payload.tasks[item.id];
+          if (remote) {
+            item.status =
+              remote.status === "completed"
+                ? "completed"
+                : remote.status === "in_progress"
+                  ? "in_progress"
+                  : item.status;
+            if (remote.updatedBy) item.completedBy = remote.updatedBy;
+            if (remote.updatedAt) item.completedAt = remote.updatedAt;
+            if (remote.status === "completed" && item.fileManifest) {
+              item.fileManifest.files.forEach((f) => {
+                f.status = "downloaded";
+              });
+              item.fileManifest.downloadedCount = item.fileManifest.totalExpected;
+              item.fileManifest.pendingCount = 0;
+              item.fileManifest.failedCount = 0;
+            }
+          }
+        }
+      }
+    }
+
+    // Merge custom nodes
+    if (payload.customNodes && Array.isArray(payload.customNodes)) {
+      for (const node of payload.customNodes) {
+        const shift = node.pipeline || "Morning";
+        if (!checklists[shift]) checklists[shift] = [];
+        if (!checklists[shift].some((x) => x.id === node.id)) {
+          checklists[shift].push({ ...node, isCustom: true });
+        }
+      }
+    }
+
+    // Merge remote audit logs
+    const auditLog: AuditEvent[] = (payload.auditEvents || []).map((ev) => ({
+      taskId: ev.taskId,
+      shift: "Morning",
+      process: ev.action === "MANUAL_SET_TO_OK" ? "Manual Override" : ev.action,
+      completedBy: ev.operator,
+      role: "Operator",
+      completedAt: ev.timestamp,
+      action: ev.action === "MANUAL_SET_TO_OK" ? "manual_set_to_ok" : "advance_status",
+      reason: ev.reason,
+    }));
+
+    useTaskStore.setState({
+      checklists,
+      auditLog: auditLog.length > 0 ? auditLog : useTaskStore.getState().auditLog,
+      syncStatus: syncClient.getStatus(),
+      dbMode: payload.dbMode || "fallback",
+    });
+  } else if (event.type === "TASK_UPDATED") {
+    const record = event.data?.record;
+    if (!record) return;
+
+    const checklists = structuredClone(useTaskStore.getState().checklists);
+    for (const shift of Object.keys(checklists)) {
+      const item = checklists[shift].find((x) => x.id === record.id);
+      if (item) {
+        item.status =
+          record.status === "completed"
+            ? "completed"
+            : record.status === "in_progress"
+              ? "in_progress"
+              : item.status;
+        if (record.updatedBy) item.completedBy = record.updatedBy;
+        if (record.updatedAt) item.completedAt = record.updatedAt;
+      }
+    }
+    useTaskStore.setState({ checklists });
+  } else if (event.type === "TASK_OVERRIDDEN") {
+    const { record } = event.data || {};
+    if (!record) return;
+
+    const checklists = structuredClone(useTaskStore.getState().checklists);
+    for (const shift of Object.keys(checklists)) {
+      const item = checklists[shift].find((x) => x.id === record.id);
+      if (item) {
+        item.status = "completed";
+        item.completedBy = `${record.updatedBy} (Manual OK)`;
+        item.completedAt = new Date().toLocaleTimeString("en-GB", { timeZone: "Asia/Kolkata" });
+        if (item.fileManifest) {
+          item.fileManifest.files.forEach((f) => {
+            f.status = "downloaded";
+          });
+          item.fileManifest.downloadedCount = item.fileManifest.totalExpected;
+          item.fileManifest.pendingCount = 0;
+          item.fileManifest.failedCount = 0;
+        }
+      }
+    }
+
+    const newLogItem: AuditEvent = {
+      taskId: record.id,
+      shift: "Morning",
+      process: "Manual Override",
+      completedBy: record.updatedBy || "Operator",
+      role: "Operator",
+      completedAt: record.updatedAt || new Date().toISOString(),
+      action: "manual_set_to_ok",
+      reason: record.reason || "Manual Set to OK",
+    };
+
+    useTaskStore.setState((s) => ({
+      checklists,
+      auditLog: [newLogItem, ...s.auditLog],
+    }));
+  } else if (event.type === "NODE_CREATED") {
+    const node = event.data?.node;
+    if (!node) return;
+
+    const checklists = structuredClone(useTaskStore.getState().checklists);
+    const shift = node.pipeline || "Morning";
+    if (!checklists[shift]) checklists[shift] = [];
+    if (!checklists[shift].some((x) => x.id === node.id)) {
+      checklists[shift].push({ ...node, isCustom: true });
+      useTaskStore.setState({ checklists });
+    }
+  }
+});

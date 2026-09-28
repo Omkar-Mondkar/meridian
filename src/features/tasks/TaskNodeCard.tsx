@@ -48,16 +48,14 @@ export function TaskNodeCard({
       onMouseLeave={() => onHover(null)}
       onClick={() => {
         onSelectNode(node.id);
-        if (node.id === "M1" || node.fileManifest) {
-          onOpenInspector(node.id);
-        }
+        onOpenInspector(node.id);
       }}
       title={
         isBlocked
-          ? `Blocked by prerequisite: ${(node.dependsOn || []).join(", ")}`
+          ? `Blocked by prerequisite: ${(node.dependsOn || []).join(", ")}. Click to inspect or override.`
           : node.id === "M1"
           ? "Click to open NetApp Exchange Files Inspector"
-          : `${node.process} (${node.time})`
+          : `Click to inspect ${node.process} & run diagnostics`
       }
     >
       <div className="node-header">
@@ -105,6 +103,7 @@ export function TaskNodeCard({
           className="node-manifest-banner"
           onClick={(e) => {
             e.stopPropagation();
+            onSelectNode(node.id);
             onOpenInspector(node.id);
           }}
           title="Click to inspect all NetApp exchange files"
@@ -137,7 +136,7 @@ export function TaskNodeCard({
       )}
 
       {/* Completed Stamp */}
-      {isCompleted && (
+      {isCompleted ? (
         <div
           style={{
             fontSize: 10,
@@ -149,9 +148,45 @@ export function TaskNodeCard({
           }}
         >
           <span>✓</span>
-          <span>
+          <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
             {node.completedBy || "Completed"} {node.completedAt ? `at ${node.completedAt}` : ""}
           </span>
+        </div>
+      ) : (
+        <div
+          style={{
+            display: "flex",
+            justifyContent: "space-between",
+            alignItems: "center",
+            marginTop: 6,
+            paddingTop: 4,
+            borderTop: "1px solid rgba(255, 255, 255, 0.06)",
+          }}
+        >
+          <span style={{ fontSize: 10, color: "var(--text-lo)" }}>
+            {node.executor || "Manual"}
+          </span>
+          <button
+            className="node-card-quick-ok"
+            onClick={(e) => {
+              e.stopPropagation();
+              onSelectNode(node.id);
+              onOpenInspector(node.id);
+            }}
+            title="Inspect task details and set to OK"
+            style={{
+              fontSize: 10,
+              fontWeight: 600,
+              padding: "2px 8px",
+              borderRadius: 4,
+              color: "var(--cyan)",
+              background: "rgba(79, 217, 208, 0.12)",
+              border: "1px solid rgba(79, 217, 208, 0.28)",
+              cursor: "pointer",
+            }}
+          >
+            Inspect / Set to OK →
+          </button>
         </div>
       )}
     </div>

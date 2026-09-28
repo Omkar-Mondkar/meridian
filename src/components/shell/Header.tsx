@@ -1,5 +1,6 @@
 import React from "react";
 import { useScheduleStore } from "../../stores/useScheduleStore";
+import { useTaskStore } from "../../stores/useTaskStore";
 import { BrandLogo } from "../ui/BrandLogo";
 
 interface HeaderProps {
@@ -18,6 +19,7 @@ export function Header({
   soundEnabled,
 }: HeaderProps) {
   const { session } = useScheduleStore();
+  const { syncStatus, dbMode } = useTaskStore();
 
   return (
     <header className="header">
@@ -56,6 +58,57 @@ export function Header({
         <div className="chip" id="syncChip">
           <span className="dot" />
           IST · SYNCED
+        </div>
+
+        <div
+          className={`chip sync-status-chip ${syncStatus}`}
+          id="wsSyncChip"
+          title={
+            syncStatus === "connected"
+              ? `Connected to real-time operations hub (${dbMode.toUpperCase()})`
+              : syncStatus === "connecting"
+                ? "Connecting to real-time sync server..."
+                : "Offline mode: local state cached"
+          }
+          style={{
+            borderColor:
+              syncStatus === "connected"
+                ? "rgba(34, 197, 94, 0.4)"
+                : syncStatus === "connecting"
+                  ? "rgba(234, 179, 8, 0.4)"
+                  : "rgba(148, 163, 184, 0.25)",
+            background:
+              syncStatus === "connected"
+                ? "rgba(34, 197, 94, 0.08)"
+                : syncStatus === "connecting"
+                  ? "rgba(234, 179, 8, 0.08)"
+                  : "rgba(148, 163, 184, 0.05)",
+          }}
+        >
+          <span
+            className="dot"
+            style={{
+              background:
+                syncStatus === "connected"
+                  ? "#22c55e"
+                  : syncStatus === "connecting"
+                    ? "#eab308"
+                    : "#64748b",
+              boxShadow:
+                syncStatus === "connected"
+                  ? "0 0 8px #22c55e"
+                  : syncStatus === "connecting"
+                    ? "0 0 6px #eab308"
+                    : "none",
+            }}
+          />
+          <span className="mono" style={{ fontSize: "11px", letterSpacing: "0.04em" }}>
+            {syncStatus === "connected"
+              ? `LIVE SYNC · ${dbMode === "mongodb" ? "MONGO" : "LOCAL"}`
+              : syncStatus === "connecting"
+                ? "CONNECTING..."
+                : "OFFLINE"}
+          </span>
         </div>
 
         {!soundEnabled && (

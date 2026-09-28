@@ -58,3 +58,5 @@ Thumbs.db
 .cache/
 .parcel-cache/
 .turbo/
+data/
+*.db
