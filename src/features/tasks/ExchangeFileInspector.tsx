@@ -1,6 +1,7 @@
 import React, { useState, useMemo } from "react";
 import { useTaskStore } from "../../stores/useTaskStore";
 import type { ChecklistItem } from "../../data/roster";
+import { AutomationPollerTab } from "./AutomationPollerTab";
 import "./ExchangeInspector.css";
 
 export function ExchangeFileInspector() {
@@ -17,6 +18,7 @@ export function ExchangeFileInspector() {
     getNodeDerivedStatus,
   } = useTaskStore();
 
+  const [inspectorTab, setInspectorTab] = useState<"details" | "automation">("details");
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedSegment, setSelectedSegment] = useState<string>("ALL");
   const [statusFilter, setStatusFilter] = useState<string>("ALL");
@@ -218,8 +220,58 @@ export function ExchangeFileInspector() {
           </div>
         </div>
 
+        {/* Sub-tab Navigation */}
+        <div
+          style={{
+            display: "flex",
+            alignItems: "center",
+            gap: 4,
+            padding: "8px 24px",
+            background: "rgba(255, 255, 255, 0.02)",
+            borderBottom: "1px solid rgba(255, 255, 255, 0.08)",
+          }}
+        >
+          <button
+            type="button"
+            onClick={() => setInspectorTab("details")}
+            style={{
+              padding: "6px 14px",
+              borderRadius: 6,
+              fontSize: 12,
+              fontWeight: 600,
+              background: inspectorTab === "details" ? "rgba(79, 217, 208, 0.15)" : "transparent",
+              color: inspectorTab === "details" ? "var(--cyan)" : "var(--text-lo)",
+              border: inspectorTab === "details" ? "1px solid rgba(79, 217, 208, 0.3)" : "1px solid transparent",
+              cursor: "pointer",
+            }}
+          >
+            {isManifestTask ? "📁 File Manifest & Segments" : "📋 Dependencies & DAG"}
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setInspectorTab("automation")}
+            style={{
+              padding: "6px 14px",
+              borderRadius: 6,
+              fontSize: 12,
+              fontWeight: 600,
+              background: inspectorTab === "automation" ? "rgba(79, 217, 208, 0.15)" : "transparent",
+              color: inspectorTab === "automation" ? "var(--cyan)" : "var(--text-lo)",
+              border: inspectorTab === "automation" ? "1px solid rgba(79, 217, 208, 0.3)" : "1px solid transparent",
+              cursor: "pointer",
+              display: "flex",
+              alignItems: "center",
+              gap: 6,
+            }}
+          >
+            <span>⚡</span>
+            <span>Automation & Poller Daemon</span>
+          </button>
+        </div>
+
         {/* --- VIEW MODE 1: Exchange File Manifest View (M1) --- */}
-        {isManifestTask && (
+        {inspectorTab === "details" && isManifestTask && (
           <>
             {/* Metrics Banner */}
             <div className="inspector-metrics-banner">
@@ -370,7 +422,7 @@ export function ExchangeFileInspector() {
         )}
 
         {/* --- VIEW MODE 2: General Task Diagnostics & Operations View --- */}
-        {!isManifestTask && (
+        {inspectorTab === "details" && !isManifestTask && (
           <div className="inspector-task-detail-container">
             <div className="inspector-task-layout">
               {/* Left Column: Prerequisites, Dependents & Runbook */}
@@ -478,9 +530,22 @@ export function ExchangeFileInspector() {
                 <div className="inspector-card terminal-card">
                   <div className="inspector-card-title" style={{ justifyContent: "space-between" }}>
                     <span>💻 Verification Diagnostics & Server Logs</span>
-                    <span className="mono" style={{ fontSize: 11, color: "var(--green)" }}>
-                      ● DAEMON ACTIVE
-                    </span>
+                    <button
+                      type="button"
+                      onClick={() => setInspectorTab("automation")}
+                      style={{
+                        padding: "3px 8px",
+                        borderRadius: 4,
+                        background: "rgba(79, 217, 208, 0.15)",
+                        border: "1px solid rgba(79, 217, 208, 0.35)",
+                        color: "var(--cyan)",
+                        fontSize: 10,
+                        fontWeight: 700,
+                        cursor: "pointer",
+                      }}
+                    >
+                      ⚡ Open Live Automation Runner
+                    </button>
                   </div>
 
                   <div className="diagnostics-meta-grid">
@@ -561,6 +626,25 @@ export function ExchangeFileInspector() {
                 )}
               </div>
             </div>
+          </div>
+        )}
+ 
+        {/* --- VIEW MODE 3: Script Automation & Poller Daemon Configuration --- */}
+        {inspectorTab === "automation" && (
+          <div style={{ flex: 1, minHeight: 0, overflow: "hidden" }}>
+            <AutomationPollerTab
+              taskId={currentTask.id}
+              taskTitle={currentTask.process}
+              isCompleted={isCompleted}
+              onSetTaskStatusToOk={() =>
+                setTaskStatusToOk(
+                  selectedShift,
+                  currentTask.id,
+                  currentPersona.name,
+                  "Automated Script Verification Pass"
+                )
+              }
+            />
           </div>
         )}
 

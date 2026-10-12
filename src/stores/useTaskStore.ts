@@ -35,6 +35,13 @@ export interface AuditEvent {
   reason?: string;
 }
 
+export interface PollerClientStatus {
+  state: 'active' | 'idle' | 'circuit_open' | 'no_credentials';
+  consecutiveFailures?: number;
+  lastCycleAt?: string | null;
+  lastProbedTaskId?: string | null;
+}
+
 export type ViewMode = "graph" | "table";
 
 interface TaskState {
@@ -47,6 +54,7 @@ interface TaskState {
   // Connectivity & Backend Sync
   syncStatus: SyncConnectionStatus;
   dbMode: SyncDbMode;
+  pollerStatus: PollerClientStatus;
 
   // Flowchart & DAG State
   viewMode: ViewMode;
@@ -56,6 +64,7 @@ interface TaskState {
   nodeBuilderOpen: boolean;
 
   // Actions
+  setPollerStatus: (status: PollerClientStatus) => void;
   setSelectedShift: (shift: ShiftKey, manual: boolean) => void;
   setAutoFollow: (v: boolean) => void;
   autoFollowTo: (shift: ShiftKey) => void;
@@ -100,6 +109,7 @@ export const useTaskStore = create<TaskState>((set, get) => ({
 
   syncStatus: syncClient.getStatus(),
   dbMode: syncClient.getDbMode(),
+  pollerStatus: { state: "idle" },
 
   viewMode: "graph",
   editMode: false,
@@ -107,6 +117,7 @@ export const useTaskStore = create<TaskState>((set, get) => ({
   inspectorOpen: false,
   nodeBuilderOpen: false,
 
+  setPollerStatus: (pollerStatus) => set({ pollerStatus }),
   setSelectedShift: (shift, manual) => {
     const prevPersona = get().currentPersona;
     const available = getPersonasForTasks(shift);
@@ -464,5 +475,68 @@ syncClient.subscribe((event) => {
       checklists[shift].push({ ...node, isCustom: true });
       useTaskStore.setState({ checklists });
     }
+  } else if (event.type === "TASK_COMPLETED_BY_POLLER") {
+    const { taskId, record, matchDetail } = event.data || {};
+    if (!taskId) return;
+
+    const checklists = structuredClone(useTaskStore.getState().checklists);
+    for (const shift of Object.keys(checklists)) {
+      const item = checklists[shift].find((x) => x.id === taskId);
+      if (item) {
+        item.status = "completed";
+        item.completedBy = "Poller Daemon";
+        item.completedAt = new Date().toLocaleTimeString("en-GB", { timeZone: "Asia/Kolkata" });
+        if (item.fileManifest) {
+          item.fileManifest.files.forEach((f) => {
+            f.status = "downloaded";
+          });
+          item.fileManifest.downloadedCount = item.fileManifest.totalExpected;
+          item.fileManifest.pendingCount = 0;
+          item.fileManifest.failedCount = 0;
+        }
+      }
+    }
+
+    const newLogItem: AuditEvent = {
+      taskId,
+      shift: "Morning",
+      process: "Automated Poller Verification",
+      completedBy: "Poller Daemon",
+      role: "System",
+      completedAt: record?.updatedAt || new Date().toISOString(),
+      action: "advance_status",
+      reason: matchDetail || "Auto-verified via SSH probe",
+    };
+
+    useTaskStore.setState((s) => ({
+      checklists,
+      auditLog: [newLogItem, ...s.auditLog],
+    }));
+  } else if (event.type === "POLLER_STATUS") {
+    const status = event.data?.status;
+    if (status) {
+      useTaskStore.setState({ pollerStatus: status });
+    }
+  } else if (event.type === "TASK_METRICS_UPDATED") {
+    const { taskId, metrics } = event.data || {};
+    if (!taskId || !metrics) return;
+
+    const checklists = structuredClone(useTaskStore.getState().checklists);
+    for (const shift of Object.keys(checklists)) {
+      const item = checklists[shift].find((x) => x.id === taskId);
+      if (item && item.fileManifest) {
+        if (typeof metrics.downloaded === "number") {
+          item.fileManifest.downloadedCount = metrics.downloaded;
+        }
+        if (typeof metrics.total === "number") {
+          item.fileManifest.totalExpected = metrics.total;
+        }
+        item.fileManifest.pendingCount = Math.max(
+          0,
+          item.fileManifest.totalExpected - item.fileManifest.downloadedCount
+        );
+      }
+    }
+    useTaskStore.setState({ checklists });
   }
 });

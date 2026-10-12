@@ -1,7 +1,8 @@
-import React from "react";
+import React, { useState } from "react";
 import { useScheduleStore } from "../../stores/useScheduleStore";
 import { useTaskStore } from "../../stores/useTaskStore";
 import { BrandLogo } from "../ui/BrandLogo";
+import { SshSettingsModal } from "./SshSettingsModal";
 
 interface HeaderProps {
   liveChipLabel: string | null;
@@ -19,7 +20,8 @@ export function Header({
   soundEnabled,
 }: HeaderProps) {
   const { session } = useScheduleStore();
-  const { syncStatus, dbMode } = useTaskStore();
+  const { syncStatus, dbMode, pollerStatus } = useTaskStore();
+  const [sshModalOpen, setSshModalOpen] = useState(false);
 
   return (
     <header className="header">
@@ -111,6 +113,66 @@ export function Header({
           </span>
         </div>
 
+        {/* Automated Server Poller Chip */}
+        <div
+          className={`chip poller-status-chip ${pollerStatus.state}`}
+          id="pollerStatusChip"
+          onClick={() => setSshModalOpen(true)}
+          title={
+            pollerStatus.state === "active"
+              ? `Automated Server Poller Active${pollerStatus.lastProbedTaskId ? ` · Last probed ${pollerStatus.lastProbedTaskId}` : ""} (Click to open SSH Vault)`
+              : pollerStatus.state === "circuit_open"
+                ? "Poller circuit breaker tripped: SSH connections temporarily paused (Click to check settings)"
+                : pollerStatus.state === "no_credentials"
+                  ? "Poller standing by: No SSH credentials configured (Click to configure)"
+                  : "Poller daemon standing by (Click to configure)"
+          }
+          style={{
+            cursor: "pointer",
+            borderColor:
+              pollerStatus.state === "active"
+                ? "rgba(79, 217, 208, 0.4)"
+                : pollerStatus.state === "circuit_open"
+                  ? "rgba(255, 77, 94, 0.4)"
+                  : "rgba(148, 163, 184, 0.25)",
+            background:
+              pollerStatus.state === "active"
+                ? "rgba(79, 217, 208, 0.08)"
+                : pollerStatus.state === "circuit_open"
+                  ? "rgba(255, 77, 94, 0.08)"
+                  : "rgba(148, 163, 184, 0.05)",
+          }}
+        >
+          <span
+            className="dot"
+            style={{
+              background:
+                pollerStatus.state === "active"
+                  ? "#4FD9D0"
+                  : pollerStatus.state === "circuit_open"
+                    ? "#FF4D5E"
+                    : pollerStatus.state === "no_credentials"
+                      ? "#FFB020"
+                      : "#64748b",
+              boxShadow:
+                pollerStatus.state === "active"
+                  ? "0 0 8px #4FD9D0"
+                  : pollerStatus.state === "circuit_open"
+                    ? "0 0 8px #FF4D5E"
+                    : "none",
+            }}
+          />
+          <span className="mono" style={{ fontSize: "11px", letterSpacing: "0.04em" }}>
+            {pollerStatus.state === "active"
+              ? "POLLER · ACTIVE"
+              : pollerStatus.state === "circuit_open"
+                ? "POLLER · PAUSED"
+                : pollerStatus.state === "no_credentials"
+                  ? "POLLER · NO KEY"
+                  : "POLLER · IDLE"}
+          </span>
+        </div>
+
         {!soundEnabled && (
           <button
             className="btn"
@@ -124,6 +186,29 @@ export function Header({
 
         <button
           className="icon-btn"
+          id="sshSettingsBtn"
+          title="Central Reporting Server SSH Configuration & Vault"
+          onClick={() => setSshModalOpen(true)}
+          aria-label="SSH Settings"
+          style={{
+            display: "flex",
+            alignItems: "center",
+            gap: 5,
+            padding: "5px 9px",
+            borderRadius: 7,
+            background: "rgba(79, 217, 208, 0.08)",
+            border: "1px solid rgba(79, 217, 208, 0.28)",
+            color: "var(--cyan)",
+            fontSize: 11,
+            fontWeight: 600,
+          }}
+        >
+          <span>⚡</span>
+          <span className="mono">SSH VAULT</span>
+        </button>
+
+        <button
+          className="icon-btn"
           id="muteBtn"
           title="Toggle voice announcements"
           onClick={onMuteToggle}
@@ -132,6 +217,11 @@ export function Header({
           {muted ? "🔇" : "🔊"}
         </button>
       </div>
+
+      <SshSettingsModal
+        isOpen={sshModalOpen}
+        onClose={() => setSshModalOpen(false)}
+      />
     </header>
   );
 }

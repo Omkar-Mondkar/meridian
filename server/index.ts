@@ -1,12 +1,15 @@
 import http from 'node:http';
-import { dbInstance, TaskStateRecord, TaskAuditEvent } from './db.js';
+import { dbInstance, TaskStateRecord, TaskAuditEvent, TaskAutomationRule } from './db.js';
 import { socketHub } from './socket.js';
+import { testSshConnection, executeSshCommand, SshConfig } from './ssh.js';
+import { evaluateProbeExecution } from './evaluator.js';
+import { pollerDaemon } from './poller.js';
 
 const PORT = process.env.PORT ? parseInt(process.env.PORT, 10) : 3001;
 
 function setCorsHeaders(res: http.ServerResponse) {
   res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS, PATCH');
+  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, OPTIONS, PATCH, DELETE');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
 }
 
@@ -133,6 +136,210 @@ const server = http.createServer(async (req, res) => {
       return;
     }
 
+    // SSH settings: Get redacted settings
+    if (pathname === '/api/settings/ssh' && req.method === 'GET') {
+      const settings = await dbInstance.getPublicSshSettings();
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ settings }));
+      return;
+    }
+
+    // SSH settings: Save credentials (encrypted at rest)
+    if (pathname === '/api/settings/ssh' && req.method === 'POST') {
+      const body = await parseJsonBody<{
+        host: string;
+        port: number;
+        username: string;
+        authType: 'password' | 'privateKey';
+        password?: string;
+        privateKey?: string;
+        passphrase?: string;
+        operator?: string;
+      }>(req);
+
+      if (!body.host || !body.username) {
+        res.writeHead(400, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ error: 'Host and Username are required' }));
+        return;
+      }
+
+      await dbInstance.saveSshCredentials(body);
+
+      const event: TaskAuditEvent = {
+        id: `ssh-conf-${Date.now()}`,
+        taskId: 'SYSTEM',
+        action: 'AUTOMATION_CONFIG_UPDATED',
+        operator: body.operator || 'Operator',
+        reason: 'Updated central server SSH credentials',
+        timestamp: new Date().toISOString()
+      };
+      await dbInstance.appendAuditLog(event);
+
+      const settings = await dbInstance.getPublicSshSettings();
+      socketHub.broadcast({ type: 'SSH_SETTINGS_UPDATED', settings });
+
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ success: true, settings }));
+      return;
+    }
+
+    // SSH test handshake
+    if (pathname === '/api/settings/ssh/test' && req.method === 'POST') {
+      const body = await parseJsonBody<{
+        host?: string;
+        port?: number;
+        username?: string;
+        authType?: 'password' | 'privateKey';
+        password?: string;
+        privateKey?: string;
+        passphrase?: string;
+      }>(req);
+
+      let configToTest: SshConfig | null = null;
+      if (body.host && body.username) {
+        // If password/key omitted, try merging from stored
+        const stored = await dbInstance.getDecryptedSshConfig();
+        configToTest = {
+          host: body.host,
+          port: body.port || 22,
+          username: body.username,
+          authType: body.authType || 'password',
+          password: body.password !== undefined && body.password !== '' ? body.password : stored?.password,
+          privateKey: body.privateKey !== undefined && body.privateKey !== '' ? body.privateKey : stored?.privateKey,
+          passphrase: body.passphrase !== undefined && body.passphrase !== '' ? body.passphrase : stored?.passphrase
+        };
+      } else {
+        configToTest = await dbInstance.getDecryptedSshConfig();
+      }
+
+      if (!configToTest) {
+        res.writeHead(400, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ error: 'No SSH credentials configured or provided to test' }));
+        return;
+      }
+
+      const result = await testSshConnection(configToTest, 5000);
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify(result));
+      return;
+    }
+
+    // Get all automation rules
+    if (pathname === '/api/automation' && req.method === 'GET') {
+      const rules = await dbInstance.getAllAutomationRules();
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ rules }));
+      return;
+    }
+
+    // Interactive on-demand probe runner
+    if (pathname === '/api/automation/test' && req.method === 'POST') {
+      const body = await parseJsonBody<{
+        taskId?: string;
+        scriptPath: string;
+        args?: string[];
+        expectedExitCode?: number;
+        matchMode?: 'exit_code_only' | 'stdout_regex' | 'stdout_contains' | 'stdout_json_metric';
+        matchPattern?: string;
+        jsonMetricKey?: string;
+        jsonMetricExpected?: string | number;
+      }>(req);
+
+      if (!body.scriptPath) {
+        res.writeHead(400, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ error: 'scriptPath is required' }));
+        return;
+      }
+
+      const sshConfig = await dbInstance.getDecryptedSshConfig();
+      if (!sshConfig) {
+        res.writeHead(400, { 'Content-Type': 'application/json' });
+        res.end(
+          JSON.stringify({
+            error: 'Central SSH server credentials not configured. Please configure SSH settings first.'
+          })
+        );
+        return;
+      }
+
+      const fullCommand = body.args && body.args.length > 0 ? `${body.scriptPath} ${body.args.join(' ')}` : body.scriptPath;
+      const execution = await executeSshCommand(sshConfig, fullCommand, 8000);
+      const evaluation = evaluateProbeExecution(
+        {
+          expectedExitCode: body.expectedExitCode ?? 0,
+          matchMode: body.matchMode || 'exit_code_only',
+          matchPattern: body.matchPattern,
+          jsonMetricKey: body.jsonMetricKey,
+          jsonMetricExpected: body.jsonMetricExpected
+        },
+        execution
+      );
+
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ execution, evaluation }));
+      return;
+    }
+
+    // Get or update automation rule for a specific task
+    if (pathname.startsWith('/api/automation/')) {
+      const taskId = decodeURIComponent(pathname.slice('/api/automation/'.length));
+
+      if (req.method === 'GET') {
+        const rule = await dbInstance.getAutomationRule(taskId);
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ rule }));
+        return;
+      }
+
+      if (req.method === 'PUT' || req.method === 'POST') {
+        const body = await parseJsonBody<TaskAutomationRule & { operator?: string }>(req);
+        const rule: TaskAutomationRule = {
+          taskId,
+          enabled: Boolean(body.enabled),
+          scriptPath: body.scriptPath || '',
+          args: body.args || [],
+          expectedExitCode: body.expectedExitCode ?? 0,
+          matchMode: body.matchMode || 'exit_code_only',
+          matchPattern: body.matchPattern || '',
+          jsonMetricKey: body.jsonMetricKey || '',
+          jsonMetricExpected: body.jsonMetricExpected,
+          pollIntervalSec: body.pollIntervalSec || 15,
+          lastRunAt: body.lastRunAt,
+          lastStatus: body.lastStatus,
+          lastExitCode: body.lastExitCode,
+          lastOutput: body.lastOutput,
+          lastError: body.lastError,
+          updatedAt: new Date().toISOString()
+        };
+
+        await dbInstance.saveAutomationRule(rule);
+
+        const event: TaskAuditEvent = {
+          id: `auto-rule-${Date.now()}`,
+          taskId,
+          action: 'AUTOMATION_CONFIG_UPDATED',
+          operator: body.operator || 'Operator',
+          reason: `Updated automation rule for ${taskId}`,
+          timestamp: new Date().toISOString(),
+          details: { scriptPath: rule.scriptPath, enabled: rule.enabled }
+        };
+        await dbInstance.appendAuditLog(event);
+
+        socketHub.broadcast({ type: 'AUTOMATION_RULE_UPDATED', taskId, rule });
+
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ success: true, rule }));
+        return;
+      }
+    }
+
+    // Poller daemon status endpoint
+    if (pathname === '/api/poller/status' && req.method === 'GET') {
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ status: pollerDaemon.getStatus() }));
+      return;
+    }
+
     // Default 404
     res.writeHead(404, { 'Content-Type': 'application/json' });
     res.end(JSON.stringify({ error: 'Not Found' }));
@@ -149,6 +356,9 @@ socketHub.init(server);
 // Connect to MongoDB (or local fallback) and start listening
 async function bootstrap() {
   await dbInstance.connect();
+
+  // Start background SSH health check poller daemon
+  pollerDaemon.start(5000);
 
   server.listen(PORT, '0.0.0.0', () => {
     console.log(`=======================================================`);

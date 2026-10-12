@@ -19,6 +19,11 @@ export type WsServerEvent =
     }
   | { type: 'TASK_UPDATED'; record: TaskStateRecord }
   | { type: 'TASK_OVERRIDDEN'; event: TaskAuditEvent; record: TaskStateRecord }
+  | { type: 'TASK_COMPLETED_BY_POLLER'; taskId: string; event: TaskAuditEvent; record: TaskStateRecord; matchDetail?: string }
+  | { type: 'TASK_METRICS_UPDATED'; taskId: string; metrics: any }
+  | { type: 'POLLER_STATUS'; status: any }
+  | { type: 'SSH_SETTINGS_UPDATED'; settings: any }
+  | { type: 'AUTOMATION_RULE_UPDATED'; taskId: string; rule: any }
   | { type: 'NODE_CREATED'; node: CustomNodeRecord }
   | { type: 'PONG'; timestamp: string };
 
