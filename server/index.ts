@@ -1,16 +1,17 @@
 import http from 'node:http';
-import { dbInstance, TaskStateRecord, TaskAuditEvent, TaskAutomationRule } from './db.js';
+import { dbInstance, TaskStateRecord, TaskAuditEvent, TaskAutomationRule, UserRecord, GroupRecord } from './db.js';
 import { socketHub } from './socket.js';
 import { testSshConnection, executeSshCommand, SshConfig } from './ssh.js';
 import { evaluateProbeExecution } from './evaluator.js';
 import { pollerDaemon } from './poller.js';
+import { authorizeRequest, resolveOperator } from './auth.js';
 
 const PORT = process.env.PORT ? parseInt(process.env.PORT, 10) : 3001;
 
 function setCorsHeaders(res: http.ServerResponse) {
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, OPTIONS, PATCH, DELETE');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Operator-Id');
 }
 
 function parseJsonBody<T>(req: http.IncomingMessage): Promise<T> {
@@ -82,9 +83,12 @@ const server = http.createServer(async (req, res) => {
       return;
     }
 
-    // Manual override endpoint
+    // Manual override endpoint (Guarded by dag:override_ok)
     if (pathname === '/api/tasks/override' && req.method === 'POST') {
-      const body = await parseJsonBody<{ taskId: string; operator: string; reason: string }>(req);
+      const auth = await authorizeRequest(req, res, 'dag:override_ok');
+      if (!auth.allowed) return;
+
+      const body = await parseJsonBody<{ taskId: string; operator?: string; reason?: string }>(req);
       if (!body.taskId) {
         res.writeHead(400, { 'Content-Type': 'application/json' });
         res.end(JSON.stringify({ error: 'taskId is required' }));
@@ -92,11 +96,12 @@ const server = http.createServer(async (req, res) => {
       }
 
       const timestamp = new Date().toISOString();
+      const effectiveOperator = auth.user ? auth.user.displayName : (body.operator || 'Operator');
       const record: TaskStateRecord = {
         id: body.taskId,
         status: 'completed',
         updatedAt: timestamp,
-        updatedBy: body.operator || 'Operator',
+        updatedBy: effectiveOperator,
         reason: body.reason || 'Manual Set to OK'
       };
       await dbInstance.saveTask(record);
@@ -105,9 +110,10 @@ const server = http.createServer(async (req, res) => {
         id: `override-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
         taskId: body.taskId,
         action: 'MANUAL_SET_TO_OK',
-        operator: body.operator || 'Operator',
+        operator: effectiveOperator,
         reason: body.reason || 'Manual Set to OK',
-        timestamp
+        timestamp,
+        details: { operatorId: auth.user?.id, role: auth.user?.roleTitle }
       };
       await dbInstance.appendAuditLog(event);
 
@@ -119,8 +125,11 @@ const server = http.createServer(async (req, res) => {
       return;
     }
 
-    // Custom node creation endpoint
+    // Custom node creation endpoint (Guarded by dag:edit_topology)
     if (pathname === '/api/tasks/node' && req.method === 'POST') {
+      const auth = await authorizeRequest(req, res, 'dag:edit_topology');
+      if (!auth.allowed) return;
+
       const body = await parseJsonBody<{ node: any }>(req);
       if (!body.node || !body.node.id) {
         res.writeHead(400, { 'Content-Type': 'application/json' });
@@ -145,8 +154,11 @@ const server = http.createServer(async (req, res) => {
       return;
     }
 
-    // Add or remove edge override
+    // Add or remove edge override (Guarded by dag:edit_topology)
     if (pathname === '/api/tasks/edge' && req.method === 'POST') {
+      const auth = await authorizeRequest(req, res, 'dag:edit_topology');
+      if (!auth.allowed) return;
+
       const body = await parseJsonBody<{
         shiftKey: string;
         sourceId: string;
@@ -187,6 +199,66 @@ const server = http.createServer(async (req, res) => {
       return;
     }
 
+    // RBAC: Get all users
+    if (pathname === '/api/rbac/users' && req.method === 'GET') {
+      const users = await dbInstance.getUsers();
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ users }));
+      return;
+    }
+
+    // RBAC: Get all groups
+    if (pathname === '/api/rbac/groups' && req.method === 'GET') {
+      const groups = await dbInstance.getGroups();
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ groups }));
+      return;
+    }
+
+    // RBAC: Get current resolved operator profile & permissions
+    if (pathname === '/api/rbac/me' && req.method === 'GET') {
+      const { user, permissions } = await resolveOperator(req);
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ user, permissions }));
+      return;
+    }
+
+    // RBAC: Create or update a user (Admin only)
+    if (pathname === '/api/rbac/user' && req.method === 'POST') {
+      const auth = await authorizeRequest(req, res, 'admin:rbac_manage');
+      if (!auth.allowed) return;
+
+      const body = await parseJsonBody<UserRecord>(req);
+      if (!body.id || !body.username || !body.displayName) {
+        res.writeHead(400, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ error: 'id, username, and displayName are required' }));
+        return;
+      }
+      body.createdAt = body.createdAt || new Date().toISOString();
+      await dbInstance.saveUser(body);
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ success: true, user: body }));
+      return;
+    }
+
+    // RBAC: Create or update a group (Admin only)
+    if (pathname === '/api/rbac/group' && req.method === 'POST') {
+      const auth = await authorizeRequest(req, res, 'admin:rbac_manage');
+      if (!auth.allowed) return;
+
+      const body = await parseJsonBody<GroupRecord>(req);
+      if (!body.id || !body.name || !Array.isArray(body.permissions)) {
+        res.writeHead(400, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ error: 'id, name, and permissions array are required' }));
+        return;
+      }
+      body.createdAt = body.createdAt || new Date().toISOString();
+      await dbInstance.saveGroup(body);
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ success: true, group: body }));
+      return;
+    }
+
     // SSH settings: Get redacted settings
     if (pathname === '/api/settings/ssh' && req.method === 'GET') {
       const settings = await dbInstance.getPublicSshSettings();
@@ -195,8 +267,11 @@ const server = http.createServer(async (req, res) => {
       return;
     }
 
-    // SSH settings: Save credentials (encrypted at rest)
+    // SSH settings: Save credentials (encrypted at rest, Guarded by ssh:manage_vault)
     if (pathname === '/api/settings/ssh' && req.method === 'POST') {
+      const auth = await authorizeRequest(req, res, 'ssh:manage_vault');
+      if (!auth.allowed) return;
+
       const body = await parseJsonBody<{
         host: string;
         port: number;
@@ -216,13 +291,15 @@ const server = http.createServer(async (req, res) => {
 
       await dbInstance.saveSshCredentials(body);
 
+      const effectiveOperator = auth.user ? auth.user.displayName : (body.operator || 'Operator');
       const event: TaskAuditEvent = {
         id: `ssh-conf-${Date.now()}`,
         taskId: 'SYSTEM',
         action: 'AUTOMATION_CONFIG_UPDATED',
-        operator: body.operator || 'Operator',
+        operator: effectiveOperator,
         reason: 'Updated central server SSH credentials',
-        timestamp: new Date().toISOString()
+        timestamp: new Date().toISOString(),
+        details: { operatorId: auth.user?.id, role: auth.user?.roleTitle }
       };
       await dbInstance.appendAuditLog(event);
 
@@ -283,8 +360,11 @@ const server = http.createServer(async (req, res) => {
       return;
     }
 
-    // Interactive on-demand probe runner
+    // Interactive on-demand probe runner (Guarded by ssh:run_probe)
     if (pathname === '/api/automation/test' && req.method === 'POST') {
+      const auth = await authorizeRequest(req, res, 'ssh:run_probe');
+      if (!auth.allowed) return;
+
       const body = await parseJsonBody<{
         taskId?: string;
         scriptPath: string;
@@ -343,6 +423,9 @@ const server = http.createServer(async (req, res) => {
       }
 
       if (req.method === 'PUT' || req.method === 'POST') {
+        const auth = await authorizeRequest(req, res, 'automation:manage');
+        if (!auth.allowed) return;
+
         const body = await parseJsonBody<TaskAutomationRule & { operator?: string }>(req);
         const rule: TaskAutomationRule = {
           taskId,
@@ -365,14 +448,15 @@ const server = http.createServer(async (req, res) => {
 
         await dbInstance.saveAutomationRule(rule);
 
+        const effectiveOperator = auth.user ? auth.user.displayName : (body.operator || 'Operator');
         const event: TaskAuditEvent = {
           id: `auto-rule-${Date.now()}`,
           taskId,
           action: 'AUTOMATION_CONFIG_UPDATED',
-          operator: body.operator || 'Operator',
+          operator: effectiveOperator,
           reason: `Updated automation rule for ${taskId}`,
           timestamp: new Date().toISOString(),
-          details: { scriptPath: rule.scriptPath, enabled: rule.enabled }
+          details: { scriptPath: rule.scriptPath, enabled: rule.enabled, operatorId: auth.user?.id, role: auth.user?.roleTitle }
         };
         await dbInstance.appendAuditLog(event);
 

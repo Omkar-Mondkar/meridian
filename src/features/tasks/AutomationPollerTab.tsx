@@ -1,5 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { useTaskStore } from "../../stores/useTaskStore";
+import { usePermissions } from "../../hooks/usePermissions";
+import { syncClient } from "../../lib/syncClient";
 
 interface AutomationPollerTabProps {
   taskId: string;
@@ -44,6 +46,7 @@ export function AutomationPollerTab({
   onSetTaskStatusToOk,
 }: AutomationPollerTabProps) {
   const { currentPersona } = useTaskStore();
+  const { canRunProbe, canManageAutomation } = usePermissions();
 
   const [rule, setRule] = useState<AutomationRuleState>({
     enabled: true,
@@ -76,7 +79,9 @@ export function AutomationPollerTab({
       setProbeResult(null);
       setProbeError("");
       try {
-        const res = await fetch(`http://localhost:3001/api/automation/${encodeURIComponent(taskId)}`);
+        const res = await fetch(`http://localhost:3001/api/automation/${encodeURIComponent(taskId)}`, {
+          headers: { ...syncClient.getAuthHeaders() },
+        });
         if (res.ok && isCurrent) {
           const data = await res.json();
           if (data.rule) {
@@ -107,6 +112,11 @@ export function AutomationPollerTab({
 
   async function handleSaveRule(e?: React.FormEvent) {
     if (e) e.preventDefault();
+    if (!canManageAutomation) {
+      setSaveError("Saving automation rules requires System Admin permissions (automation:manage)");
+      return;
+    }
+
     if (!rule.scriptPath.trim()) {
       setSaveError("Script path is required");
       return;
@@ -133,7 +143,10 @@ export function AutomationPollerTab({
 
       const res = await fetch(`http://localhost:3001/api/automation/${encodeURIComponent(taskId)}`, {
         method: "PUT",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          ...syncClient.getAuthHeaders(),
+        },
         body: JSON.stringify(payload),
       });
 
@@ -153,6 +166,11 @@ export function AutomationPollerTab({
   }
 
   async function handleRunProbeNow() {
+    if (!canRunProbe) {
+      setProbeError("Running SSH test probes requires L2 Engineer, Supervisor, or Admin permissions (ssh:run_probe)");
+      return;
+    }
+
     if (!rule.scriptPath.trim()) {
       setProbeError("Please specify a script path before testing");
       return;
@@ -176,7 +194,10 @@ export function AutomationPollerTab({
 
       const res = await fetch("http://localhost:3001/api/automation/test", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          ...syncClient.getAuthHeaders(),
+        },
         body: JSON.stringify(payload),
       });
 
@@ -509,7 +530,12 @@ export function AutomationPollerTab({
 
           <button
             type="submit"
-            disabled={savingRule}
+            disabled={savingRule || !canManageAutomation}
+            title={
+              canManageAutomation
+                ? "Save automation configuration"
+                : "Saving automation rules requires System Admin permissions (automation:manage)"
+            }
             style={{
               padding: "10px 16px",
               marginTop: 6,
@@ -519,7 +545,8 @@ export function AutomationPollerTab({
               color: "var(--cyan)",
               fontSize: 12,
               fontWeight: 700,
-              cursor: "pointer",
+              cursor: canManageAutomation ? "pointer" : "not-allowed",
+              opacity: canManageAutomation ? 1 : 0.45,
               transition: "all 0.2s ease",
             }}
           >
@@ -542,8 +569,13 @@ export function AutomationPollerTab({
 
           <button
             type="button"
-            disabled={runningProbe || !rule.scriptPath.trim()}
+            disabled={runningProbe || !rule.scriptPath.trim() || !canRunProbe}
             onClick={handleRunProbeNow}
+            title={
+              canRunProbe
+                ? "Execute script immediately via SSH"
+                : "Running SSH test probes requires L2 Engineer, Supervisor, or Admin permissions (ssh:run_probe)"
+            }
             style={{
               padding: "8px 16px",
               background: "linear-gradient(135deg, #4FD9D0 0%, #22c55e 100%)",
@@ -552,8 +584,8 @@ export function AutomationPollerTab({
               color: "#06090F",
               fontSize: 12,
               fontWeight: 700,
-              cursor: runningProbe ? "not-allowed" : "pointer",
-              opacity: runningProbe ? 0.7 : 1,
+              cursor: canRunProbe && !runningProbe ? "pointer" : "not-allowed",
+              opacity: runningProbe || !canRunProbe ? 0.5 : 1,
               boxShadow: "0 4px 14px rgba(79, 217, 208, 0.3)",
               display: "flex",
               alignItems: "center",

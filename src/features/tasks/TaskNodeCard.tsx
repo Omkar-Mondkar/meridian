@@ -1,5 +1,6 @@
 import React from "react";
 import type { ChecklistItem, NodeStatus } from "../../data/roster";
+import { usePermissions } from "../../hooks/usePermissions";
 
 interface TaskNodeCardProps {
   node: ChecklistItem;
@@ -37,6 +38,7 @@ export function TaskNodeCard({
   onPortMouseUp,
   style,
 }: TaskNodeCardProps) {
+  const { canEditDag, canOverrideOk } = usePermissions();
   const isBlocked = derivedStatus === "blocked";
   const isCompleted = node.status === "completed";
   const isDropTarget = isConnecting && !isConnectingSource;
@@ -81,7 +83,7 @@ export function TaskNodeCard({
       }
     >
       {/* Top Input Port: Drop upstream connections here */}
-      {(editMode || isConnecting) && (
+      {canEditDag && (editMode || isConnecting) && (
         <div
           className={`dag-port port-top${isDropTarget ? " target-ready" : ""}`}
           data-port="target"
@@ -97,7 +99,7 @@ export function TaskNodeCard({
       )}
 
       {/* Bottom Output Port: Drag to downstream tasks */}
-      {editMode && (
+      {canEditDag && editMode && (
         <div
           className={`dag-port port-bottom${isConnectingSource ? " source-active" : ""}`}
           data-port="source"
@@ -226,7 +228,11 @@ export function TaskNodeCard({
               onSelectNode(node.id);
               onOpenInspector(node.id);
             }}
-            title="Inspect task details and set to OK"
+            title={
+              canOverrideOk
+                ? "Inspect task details and set to OK"
+                : "Inspect task diagnostics and file logs (Manual Set to OK disabled for active role)"
+            }
             style={{
               fontSize: 10,
               fontWeight: 600,
@@ -238,7 +244,7 @@ export function TaskNodeCard({
               cursor: "pointer",
             }}
           >
-            Inspect / Set to OK →
+            {canOverrideOk ? "Inspect / Set to OK →" : "Inspect Details →"}
           </button>
         </div>
       )}

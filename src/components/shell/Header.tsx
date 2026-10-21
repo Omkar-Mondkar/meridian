@@ -3,6 +3,7 @@ import { useScheduleStore } from "../../stores/useScheduleStore";
 import { useTaskStore } from "../../stores/useTaskStore";
 import { BrandLogo } from "../ui/BrandLogo";
 import { SshSettingsModal } from "./SshSettingsModal";
+import { OperatorSwitcher } from "./OperatorSwitcher";
 
 interface HeaderProps {
   liveChipLabel: string | null;
@@ -183,6 +184,8 @@ export function Header({
             🔕 Enable sound
           </button>
         )}
+
+        <OperatorSwitcher />
 
         <button
           className="icon-btn"

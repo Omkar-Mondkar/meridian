@@ -1,10 +1,12 @@
 import React, { useState, useMemo } from "react";
 import { useTaskStore } from "../../stores/useTaskStore";
+import { usePermissions } from "../../hooks/usePermissions";
 import type { ChecklistItem } from "../../data/roster";
 import { AutomationPollerTab } from "./AutomationPollerTab";
 import "./ExchangeInspector.css";
 
 export function ExchangeFileInspector() {
+  const { canOverrideOk, canAdvanceTask } = usePermissions();
   const {
     checklists,
     selectedShift,
@@ -109,7 +111,7 @@ export function ExchangeFileInspector() {
   }
 
   function handleConfirmSetToOk() {
-    if (!currentTask) return;
+    if (!currentTask || !canOverrideOk) return;
     setTaskStatusToOk(
       selectedShift,
       currentTask.id,
@@ -121,7 +123,7 @@ export function ExchangeFileInspector() {
   }
 
   function handleAdvance() {
-    if (!currentTask) return;
+    if (!currentTask || !canAdvanceTask) return;
     advanceStatus(selectedShift, currentTask.id, currentPersona.name, currentPersona.role);
   }
 
@@ -202,9 +204,22 @@ export function ExchangeFileInspector() {
             {!isCompleted && (
               <button
                 className="manual-ok-btn"
-                style={{ padding: "6px 14px", fontSize: 12 }}
-                onClick={() => handleOpenConfirm()}
-                title="Override and mark task as completed immediately"
+                disabled={!canOverrideOk}
+                style={{
+                  padding: "6px 14px",
+                  fontSize: 12,
+                  opacity: canOverrideOk ? 1 : 0.45,
+                  cursor: canOverrideOk ? "pointer" : "not-allowed",
+                }}
+                onClick={() => {
+                  if (!canOverrideOk) return;
+                  handleOpenConfirm();
+                }}
+                title={
+                  canOverrideOk
+                    ? "Override and mark task as completed immediately"
+                    : "Manual Set to OK requires L2 Engineer, Supervisor, or Admin permissions (dag:override_ok)"
+                }
               >
                 <span>✓</span> Set to OK
               </button>
@@ -677,8 +692,20 @@ export function ExchangeFileInspector() {
             {!isCompleted && !isBlocked && (
               <button
                 className="dag-btn"
-                onClick={handleAdvance}
-                title="Advance task status"
+                disabled={!canAdvanceTask}
+                onClick={() => {
+                  if (!canAdvanceTask) return;
+                  handleAdvance();
+                }}
+                title={
+                  canAdvanceTask
+                    ? "Advance task status"
+                    : "Advancing task status requires L1 Operator, L2, Supervisor, or Admin permissions (dag:advance)"
+                }
+                style={{
+                  opacity: canAdvanceTask ? 1 : 0.45,
+                  cursor: canAdvanceTask ? "pointer" : "not-allowed",
+                }}
               >
                 ▶ Advance Status
               </button>
@@ -687,8 +714,20 @@ export function ExchangeFileInspector() {
             {!isCompleted && (
               <button
                 className="manual-ok-btn"
-                onClick={() => handleOpenConfirm()}
-                title="Override and mark task as completed immediately"
+                disabled={!canOverrideOk}
+                onClick={() => {
+                  if (!canOverrideOk) return;
+                  handleOpenConfirm();
+                }}
+                title={
+                  canOverrideOk
+                    ? "Override and mark task as completed immediately"
+                    : "Manual Set to OK requires L2 Engineer, Supervisor, or Admin permissions (dag:override_ok)"
+                }
+                style={{
+                  opacity: canOverrideOk ? 1 : 0.45,
+                  cursor: canOverrideOk ? "pointer" : "not-allowed",
+                }}
               >
                 <span>✓</span> Manual Set to OK
               </button>

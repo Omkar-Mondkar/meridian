@@ -1,5 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { useTaskStore } from "../../stores/useTaskStore";
+import { usePermissions } from "../../hooks/usePermissions";
+import { syncClient } from "../../lib/syncClient";
 
 interface SshSettingsModalProps {
   isOpen: boolean;
@@ -20,6 +22,7 @@ interface PublicSshSettings {
 
 export function SshSettingsModal({ isOpen, onClose }: SshSettingsModalProps) {
   const { currentPersona } = useTaskStore();
+  const { canManageVault } = usePermissions();
   const [host, setHost] = useState("");
   const [port, setPort] = useState(22);
   const [username, setUsername] = useState("");
@@ -47,7 +50,9 @@ export function SshSettingsModal({ isOpen, onClose }: SshSettingsModalProps) {
     setSaveSuccess(false);
     setTestResult(null);
     try {
-      const res = await fetch("http://localhost:3001/api/settings/ssh");
+      const res = await fetch("http://localhost:3001/api/settings/ssh", {
+        headers: { ...syncClient.getAuthHeaders() },
+      });
       if (res.ok) {
         const data = await res.json();
         if (data.settings) {
@@ -66,6 +71,10 @@ export function SshSettingsModal({ isOpen, onClose }: SshSettingsModalProps) {
   }
 
   async function handleTestConnection() {
+    if (!canManageVault) {
+      setTestResult({ success: false, error: "Testing SSH connections requires System Admin permissions (ssh:manage_vault)" });
+      return;
+    }
     if (!host.trim() || !username.trim()) {
       setErrorMsg("Host and Username are required to test connection.");
       return;
@@ -92,7 +101,10 @@ export function SshSettingsModal({ isOpen, onClose }: SshSettingsModalProps) {
 
       const res = await fetch("http://localhost:3001/api/settings/ssh/test", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          ...syncClient.getAuthHeaders(),
+        },
         body: JSON.stringify(payload),
       });
 
@@ -108,6 +120,10 @@ export function SshSettingsModal({ isOpen, onClose }: SshSettingsModalProps) {
 
   async function handleSave(e: React.FormEvent) {
     e.preventDefault();
+    if (!canManageVault) {
+      setErrorMsg("Modifying SSH vault credentials requires System Admin permissions (ssh:manage_vault)");
+      return;
+    }
     if (!host.trim() || !username.trim()) {
       setErrorMsg("Host and Username are required.");
       return;
@@ -136,7 +152,10 @@ export function SshSettingsModal({ isOpen, onClose }: SshSettingsModalProps) {
 
       const res = await fetch("http://localhost:3001/api/settings/ssh", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          ...syncClient.getAuthHeaders(),
+        },
         body: JSON.stringify(payload),
       });
 
@@ -272,6 +291,27 @@ export function SshSettingsModal({ isOpen, onClose }: SshSettingsModalProps) {
               }}
             >
               ✓ SSH credentials encrypted and saved securely to MongoDB vault!
+            </div>
+          )}
+
+          {!canManageVault && (
+            <div
+              style={{
+                padding: "10px 14px",
+                background: "rgba(234, 179, 8, 0.12)",
+                border: "1px solid rgba(234, 179, 8, 0.35)",
+                borderRadius: 8,
+                color: "#facc15",
+                fontSize: 12,
+                display: "flex",
+                alignItems: "center",
+                gap: 8,
+              }}
+            >
+              <span>🔒</span>
+              <span>
+                <strong>Read-Only Vault View:</strong> Modifying credentials or testing SSH handshakes requires System Admin privileges (<code>ssh:manage_vault</code>).
+              </span>
             </div>
           )}
 
@@ -533,8 +573,13 @@ export function SshSettingsModal({ isOpen, onClose }: SshSettingsModalProps) {
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: 8 }}>
             <button
               type="button"
-              disabled={testing || !host.trim() || !username.trim()}
+              disabled={testing || !host.trim() || !username.trim() || !canManageVault}
               onClick={handleTestConnection}
+              title={
+                canManageVault
+                  ? "Test SSH connection with configured parameters"
+                  : "Testing SSH connections requires System Admin permissions (ssh:manage_vault)"
+              }
               style={{
                 padding: "9px 16px",
                 background: "rgba(255, 255, 255, 0.06)",
@@ -543,7 +588,8 @@ export function SshSettingsModal({ isOpen, onClose }: SshSettingsModalProps) {
                 color: "var(--text-hi)",
                 fontSize: 12,
                 fontWeight: 600,
-                opacity: testing ? 0.6 : 1,
+                opacity: testing || !canManageVault ? 0.45 : 1,
+                cursor: canManageVault ? "pointer" : "not-allowed",
               }}
             >
               {testing ? "Testing Handshake..." : "⚡ Test Connection"}
@@ -558,13 +604,19 @@ export function SshSettingsModal({ isOpen, onClose }: SshSettingsModalProps) {
                   borderRadius: 8,
                   color: "var(--text-lo)",
                   fontSize: 12,
+                  cursor: "pointer",
                 }}
               >
                 Cancel
               </button>
               <button
                 type="submit"
-                disabled={loading}
+                disabled={loading || !canManageVault}
+                title={
+                  canManageVault
+                    ? "Encrypt and persist credentials to database vault"
+                    : "Saving SSH vault credentials requires System Admin permissions (ssh:manage_vault)"
+                }
                 style={{
                   padding: "9px 20px",
                   background: "linear-gradient(135deg, #4FD9D0 0%, #22c55e 100%)",
@@ -573,7 +625,8 @@ export function SshSettingsModal({ isOpen, onClose }: SshSettingsModalProps) {
                   color: "#06090F",
                   fontSize: 12,
                   fontWeight: 700,
-                  cursor: "pointer",
+                  cursor: canManageVault ? "pointer" : "not-allowed",
+                  opacity: canManageVault ? 1 : 0.45,
                 }}
               >
                 {loading ? "Encrypting & Saving..." : "Save to Vault"}

@@ -92,6 +92,137 @@ export interface EdgeOverrideRecord {
   updatedAt: string;
 }
 
+export type PermissionKey =
+  | 'dag:view'             // View DAG flowchart, shifts, and file manifests
+  | 'dag:advance'          // Advance task from Open -> In Progress -> Completed
+  | 'dag:override_ok'      // Execute manual "Set to OK" with reason
+  | 'dag:edit_topology'    // Drag-and-drop link/unlink edges, create custom nodes
+  | 'ssh:run_probe'        // Run interactive SSH test probe
+  | 'ssh:manage_vault'     // View/edit central server SSH credentials
+  | 'automation:manage'    // Configure script paths, intervals, and match patterns
+  | 'audit:export'         // Export compliance audit trails
+  | 'admin:rbac_manage';   // Manage users, groups, and role assignments
+
+export interface GroupRecord {
+  id: string;               // e.g., 'grp_l1_operators'
+  name: string;             // 'L1 Operations'
+  description: string;
+  permissions: PermissionKey[];
+  isSystem?: boolean;
+  createdAt: string;
+}
+
+export interface UserRecord {
+  id: string;               // e.g., 'usr_omkar'
+  username: string;         // 'omkar.m'
+  displayName: string;      // 'Omkar Mondkar'
+  roleTitle: string;        // 'Morning Shift Lead'
+  groupIds: string[];       // Many-to-many group assignments
+  isActive: boolean;
+  createdAt: string;
+}
+
+export const DEFAULT_GROUPS: GroupRecord[] = [
+  {
+    id: 'grp_viewers',
+    name: 'Viewers',
+    description: 'Read-only access to DAG, shifts, and file manifests',
+    permissions: ['dag:view'],
+    isSystem: true,
+    createdAt: '2026-01-01T00:00:00.000Z',
+  },
+  {
+    id: 'grp_l1_operators',
+    name: 'L1 Operators',
+    description: 'Frontline operations executing checklist task progression',
+    permissions: ['dag:view', 'dag:advance'],
+    isSystem: true,
+    createdAt: '2026-01-01T00:00:00.000Z',
+  },
+  {
+    id: 'grp_l2_engineers',
+    name: 'L2 Engineers',
+    description: 'Senior engineers with manual OK override and SSH probe capabilities',
+    permissions: ['dag:view', 'dag:advance', 'dag:override_ok', 'ssh:run_probe'],
+    isSystem: true,
+    createdAt: '2026-01-01T00:00:00.000Z',
+  },
+  {
+    id: 'grp_supervisors',
+    name: 'Supervisors / VP',
+    description: 'Process owners and topology managers with full DAG editing rights',
+    permissions: ['dag:view', 'dag:advance', 'dag:override_ok', 'dag:edit_topology', 'ssh:run_probe', 'audit:export'],
+    isSystem: true,
+    createdAt: '2026-01-01T00:00:00.000Z',
+  },
+  {
+    id: 'grp_admins',
+    name: 'System Admins',
+    description: 'Full administrative access to vault, automation, and user/group management',
+    permissions: [
+      'dag:view',
+      'dag:advance',
+      'dag:override_ok',
+      'dag:edit_topology',
+      'ssh:run_probe',
+      'ssh:manage_vault',
+      'automation:manage',
+      'audit:export',
+      'admin:rbac_manage',
+    ],
+    isSystem: true,
+    createdAt: '2026-01-01T00:00:00.000Z',
+  },
+];
+
+export const DEFAULT_USERS: UserRecord[] = [
+  {
+    id: 'usr_omkar',
+    username: 'omkar.mondkar',
+    displayName: 'Omkar Mondkar',
+    roleTitle: 'Morning Shift Lead (Supervisor)',
+    groupIds: ['grp_supervisors'],
+    isActive: true,
+    createdAt: '2026-01-01T00:00:00.000Z',
+  },
+  {
+    id: 'usr_sarah',
+    username: 'sarah.j',
+    displayName: 'Sarah Jenkins',
+    roleTitle: 'Operations Engineer (L2)',
+    groupIds: ['grp_l2_engineers'],
+    isActive: true,
+    createdAt: '2026-01-01T00:00:00.000Z',
+  },
+  {
+    id: 'usr_alex',
+    username: 'alex.t',
+    displayName: 'Alex Thompson',
+    roleTitle: 'Shift Operator (L1)',
+    groupIds: ['grp_l1_operators'],
+    isActive: true,
+    createdAt: '2026-01-01T00:00:00.000Z',
+  },
+  {
+    id: 'usr_admin',
+    username: 'admin',
+    displayName: 'System Administrator',
+    roleTitle: 'Platform Admin',
+    groupIds: ['grp_admins'],
+    isActive: true,
+    createdAt: '2026-01-01T00:00:00.000Z',
+  },
+  {
+    id: 'usr_guest',
+    username: 'guest',
+    displayName: 'Guest Monitor',
+    roleTitle: 'Observer (Viewer)',
+    groupIds: ['grp_viewers'],
+    isActive: true,
+    createdAt: '2026-01-01T00:00:00.000Z',
+  },
+];
+
 interface LocalStateFile {
   tasks: Record<string, TaskStateRecord>;
   auditEvents: TaskAuditEvent[];
@@ -99,6 +230,8 @@ interface LocalStateFile {
   systemSettings: Record<string, any>;
   automationRules: Record<string, TaskAutomationRule>;
   edgeOverrides: EdgeOverrideRecord[];
+  groups: GroupRecord[];
+  users: UserRecord[];
 }
 
 export class MeridianDatabase {
@@ -112,7 +245,9 @@ export class MeridianDatabase {
     customNodes: [],
     systemSettings: {},
     automationRules: {},
-    edgeOverrides: []
+    edgeOverrides: [],
+    groups: [...DEFAULT_GROUPS],
+    users: [...DEFAULT_USERS]
   };
 
   constructor() {
@@ -139,7 +274,9 @@ export class MeridianDatabase {
           customNodes: parsed.customNodes || [],
           systemSettings: parsed.systemSettings || {},
           automationRules: parsed.automationRules || {},
-          edgeOverrides: parsed.edgeOverrides || []
+          edgeOverrides: parsed.edgeOverrides || [],
+          groups: parsed.groups && parsed.groups.length > 0 ? parsed.groups : [...DEFAULT_GROUPS],
+          users: parsed.users && parsed.users.length > 0 ? parsed.users : [...DEFAULT_USERS]
         };
       }
     } catch (err) {
@@ -213,6 +350,26 @@ export class MeridianDatabase {
       }
 
       this.memoryCache.edgeOverrides = await edgesCol.find({}).toArray();
+
+      // Groups collection sync & seeding
+      const groupsCol = this.db.collection<GroupRecord>('groups');
+      const mongoGroups = await groupsCol.find({}).toArray();
+      if (mongoGroups.length > 0) {
+        this.memoryCache.groups = mongoGroups;
+      } else {
+        await groupsCol.insertMany([...DEFAULT_GROUPS]);
+        this.memoryCache.groups = [...DEFAULT_GROUPS];
+      }
+
+      // Users collection sync & seeding
+      const usersCol = this.db.collection<UserRecord>('users');
+      const mongoUsers = await usersCol.find({}).toArray();
+      if (mongoUsers.length > 0) {
+        this.memoryCache.users = mongoUsers;
+      } else {
+        await usersCol.insertMany([...DEFAULT_USERS]);
+        this.memoryCache.users = [...DEFAULT_USERS];
+      }
     } catch (err) {
       console.warn('[DB] Error during initial MongoDB sync:', err);
     }
@@ -542,6 +699,106 @@ export class MeridianDatabase {
         console.error('[DB] Mongo removeEdgeOverride failed:', err);
       }
     }
+  }
+
+  async getGroups(): Promise<GroupRecord[]> {
+    if (this.mode === 'mongodb' && this.db) {
+      try {
+        const groups = await this.db.collection<GroupRecord>('groups').find({}).toArray();
+        if (groups.length > 0) return groups;
+      } catch (err) {
+        console.warn('[DB] Mongo getGroups failed, using cache:', err);
+      }
+    }
+    return [...this.memoryCache.groups];
+  }
+
+  async getGroupById(id: string): Promise<GroupRecord | null> {
+    const groups = await this.getGroups();
+    return groups.find((g) => g.id === id) || null;
+  }
+
+  async saveGroup(group: GroupRecord): Promise<void> {
+    const idx = this.memoryCache.groups.findIndex((g) => g.id === group.id);
+    if (idx >= 0) {
+      this.memoryCache.groups[idx] = group;
+    } else {
+      this.memoryCache.groups.push(group);
+    }
+    this.persistFallbackToDisk();
+
+    if (this.mode === 'mongodb' && this.db) {
+      try {
+        await this.db.collection('groups').updateOne(
+          { id: group.id },
+          { $set: group },
+          { upsert: true }
+        );
+      } catch (err) {
+        console.error('[DB] Mongo saveGroup failed, saved in fallback:', err);
+      }
+    }
+  }
+
+  async getUsers(): Promise<UserRecord[]> {
+    if (this.mode === 'mongodb' && this.db) {
+      try {
+        const users = await this.db.collection<UserRecord>('users').find({}).toArray();
+        if (users.length > 0) return users;
+      } catch (err) {
+        console.warn('[DB] Mongo getUsers failed, using cache:', err);
+      }
+    }
+    return [...this.memoryCache.users];
+  }
+
+  async getUserById(id: string): Promise<UserRecord | null> {
+    const users = await this.getUsers();
+    return users.find((u) => u.id === id || u.username === id) || null;
+  }
+
+  async saveUser(user: UserRecord): Promise<void> {
+    const idx = this.memoryCache.users.findIndex((u) => u.id === user.id);
+    if (idx >= 0) {
+      this.memoryCache.users[idx] = user;
+    } else {
+      this.memoryCache.users.push(user);
+    }
+    this.persistFallbackToDisk();
+
+    if (this.mode === 'mongodb' && this.db) {
+      try {
+        await this.db.collection('users').updateOne(
+          { id: user.id },
+          { $set: user },
+          { upsert: true }
+        );
+      } catch (err) {
+        console.error('[DB] Mongo saveUser failed, saved in fallback:', err);
+      }
+    }
+  }
+
+  async getUserPermissions(userId: string): Promise<PermissionKey[]> {
+    const user = await this.getUserById(userId);
+    if (!user) {
+      return ['dag:view'];
+    }
+
+    const groups = await this.getGroups();
+    const permSet = new Set<PermissionKey>();
+
+    for (const gid of user.groupIds) {
+      const g = groups.find((grp) => grp.id === gid);
+      if (g && Array.isArray(g.permissions)) {
+        for (const p of g.permissions) {
+          permSet.add(p);
+        }
+      }
+    }
+
+    permSet.add('dag:view');
+    return Array.from(permSet);
   }
 }
 

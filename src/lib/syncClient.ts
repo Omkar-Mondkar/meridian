@@ -38,6 +38,8 @@ export interface SyncInitPayload {
   auditEvents: RemoteAuditEvent[];
   customNodes: any[];
   edgeOverrides?: RemoteEdgeOverride[];
+  users?: any[];
+  groups?: any[];
   dbMode: 'mongodb' | 'fallback';
   clientCount: number;
 }
@@ -52,7 +54,8 @@ type SyncListener = (event: {
     | 'STATUS_CHANGE'
     | 'TASK_COMPLETED_BY_POLLER'
     | 'POLLER_STATUS'
-    | 'TASK_METRICS_UPDATED';
+    | 'TASK_METRICS_UPDATED'
+    | 'AUTH_ERROR';
   data?: any;
 }) => void;
 
@@ -65,6 +68,7 @@ class MeridianSyncClient {
   private reconnectDelay = 1500;
   private maxReconnectDelay = 10000;
   private isExplicitlyClosed = false;
+  private operatorId = 'usr_omkar';
 
   constructor() {
     // Automatically initiate connection if in browser environment
@@ -94,6 +98,13 @@ class MeridianSyncClient {
         console.log(`[SyncClient] Connected to Meridian backend at ${url}`);
         this.setStatus('connected');
         this.reconnectDelay = 1500; // Reset backoff
+        // Identify active operator to server
+        this.ws?.send(
+          JSON.stringify({
+            type: 'CLIENT_HELLO',
+            operatorId: this.operatorId
+          })
+        );
       };
 
       this.ws.onmessage = (event) => {
@@ -166,6 +177,28 @@ class MeridianSyncClient {
     }
   }
 
+  setOperatorId(id: string) {
+    this.operatorId = id;
+    if (this.ws && this.ws.readyState === WebSocket.OPEN) {
+      this.ws.send(
+        JSON.stringify({
+          type: 'CLIENT_HELLO',
+          operatorId: id
+        })
+      );
+    }
+  }
+
+  getOperatorId(): string {
+    return this.operatorId;
+  }
+
+  getAuthHeaders(): { 'X-Operator-Id': string } {
+    return {
+      'X-Operator-Id': this.operatorId
+    };
+  }
+
   getStatus(): SyncConnectionStatus {
     return this.status;
   }
@@ -184,7 +217,8 @@ class MeridianSyncClient {
           taskId,
           status,
           updatedBy,
-          reason
+          reason,
+          operatorId: this.operatorId
         })
       );
     }
@@ -197,7 +231,8 @@ class MeridianSyncClient {
           type: 'TASK_OVERRIDE',
           taskId,
           operator,
-          reason
+          reason,
+          operatorId: this.operatorId
         })
       );
     }
@@ -208,7 +243,8 @@ class MeridianSyncClient {
       this.ws.send(
         JSON.stringify({
           type: 'NODE_CREATE',
-          node
+          node,
+          operatorId: this.operatorId
         })
       );
     }
@@ -222,7 +258,8 @@ class MeridianSyncClient {
           shiftKey,
           sourceId,
           targetId,
-          action
+          action,
+          operatorId: this.operatorId
         })
       );
     }

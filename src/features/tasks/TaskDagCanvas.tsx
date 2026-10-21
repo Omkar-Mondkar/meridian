@@ -1,11 +1,13 @@
-import React, { useRef, useState, useMemo } from "react";
+import React, { useRef, useState, useMemo, useEffect } from "react";
 import { useTaskStore } from "../../stores/useTaskStore";
+import { usePermissions } from "../../hooks/usePermissions";
 import { TaskNodeCard } from "./TaskNodeCard";
 import { SvgConnectors } from "./SvgConnectors";
 import { getNodeCoordinates, TRACK_HEADERS } from "./dagLayout";
 import "./TasksDag.css";
 
 export function TaskDagCanvas() {
+  const { canEditDag } = usePermissions();
   const {
     checklists,
     selectedShift,
@@ -38,6 +40,15 @@ export function TaskDagCanvas() {
   } | null>(null);
   const [mousePos, setMousePos] = useState<{ x: number; y: number } | null>(null);
   const [connectError, setConnectError] = useState<string | null>(null);
+
+  // Automatically reset edit mode if operator permissions are downgraded
+  useEffect(() => {
+    if (!canEditDag && editMode) {
+      setEditMode(false);
+      setConnectingFrom(null);
+      setMousePos(null);
+    }
+  }, [canEditDag, editMode, setEditMode]);
 
   const rows = checklists[selectedShift] || [];
 
@@ -241,12 +252,22 @@ export function TaskDagCanvas() {
 
           <button
             className={`dag-btn${editMode ? " primary active-edit-btn" : ""}`}
+            disabled={!canEditDag}
             onClick={() => {
+              if (!canEditDag) return;
               setEditMode(!editMode);
               setConnectingFrom(null);
               setMousePos(null);
             }}
-            title="Toggle Drag & Drop DAG Editing Mode"
+            title={
+              canEditDag
+                ? "Toggle Drag & Drop DAG Editing Mode"
+                : "Editing DAG topology requires Supervisor or System Admin permissions (dag:edit_topology)"
+            }
+            style={{
+              opacity: canEditDag ? 1 : 0.45,
+              cursor: canEditDag ? "pointer" : "not-allowed",
+            }}
           >
             <span>{editMode ? "✓ Done Editing" : "✏️ Edit DAG"}</span>
           </button>
@@ -262,8 +283,20 @@ export function TaskDagCanvas() {
 
           <button
             className="dag-btn"
-            onClick={() => setNodeBuilderOpen(true)}
-            title="Create prototype DAG task node"
+            disabled={!canEditDag}
+            onClick={() => {
+              if (!canEditDag) return;
+              setNodeBuilderOpen(true);
+            }}
+            title={
+              canEditDag
+                ? "Create prototype DAG task node"
+                : "Adding custom nodes requires Supervisor or System Admin permissions (dag:edit_topology)"
+            }
+            style={{
+              opacity: canEditDag ? 1 : 0.45,
+              cursor: canEditDag ? "pointer" : "not-allowed",
+            }}
           >
             <span>+</span>
             <span>Add Custom Node</span>

@@ -7,6 +7,7 @@ import {
   SHIFT_WINDOWS,
 } from "../../data/roster";
 import { canAct } from "../../data/personas";
+import { usePermissions } from "../../hooks/usePermissions";
 import { StatusPill } from "../../components/ui/StatusPill";
 import { PersonaDropdown } from "./PersonaDropdown";
 import { TaskDagCanvas } from "./TaskDagCanvas";
@@ -22,15 +23,18 @@ function ChecklistRow({
   shiftKey: string;
 }) {
   const { currentPersona, advanceStatus, getNodeDerivedStatus, setInspectorOpen, setSelectedTaskId } = useTaskStore();
+  const { canAdvanceTask } = usePermissions();
   const pillRef = useRef<HTMLButtonElement>(null);
   const derivedStatus = getNodeDerivedStatus(shiftKey, row.id);
   const isBlocked = derivedStatus === "blocked";
 
-  const allowed = canAct(
-    currentPersona.rbacRole || currentPersona.role,
-    row.role,
-    row.status,
-  );
+  const allowed =
+    canAdvanceTask &&
+    canAct(
+      currentPersona.rbacRole || currentPersona.role,
+      row.role,
+      row.status,
+    );
 
   function handleClick() {
     if (isBlocked) {
@@ -156,6 +160,8 @@ function ChecklistRow({
         title={
           isBlocked
             ? `Blocked by prerequisite (${row.dependsOn?.join(", ")})`
+            : !canAdvanceTask
+            ? `Advancing tasks requires L1 Operator, L2, Supervisor, or Admin permissions`
             : allowed
             ? "Click to advance status"
             : `Requires ${row.role} (Current: ${currentPersona.name} [${currentPersona.rbacRole}])`
