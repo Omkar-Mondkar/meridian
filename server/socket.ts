@@ -1,12 +1,13 @@
 import { WebSocketServer, WebSocket } from 'ws';
 import { Server } from 'node:http';
-import { dbInstance, TaskStateRecord, TaskAuditEvent, CustomNodeRecord } from './db.js';
+import { dbInstance, TaskStateRecord, TaskAuditEvent, CustomNodeRecord, EdgeOverrideRecord } from './db.js';
 
 export type WsClientAction =
   | { type: 'CLIENT_HELLO'; clientId?: string }
   | { type: 'TASK_UPDATE'; taskId: string; status: 'pending' | 'in_progress' | 'completed' | 'blocked'; updatedBy?: string; reason?: string }
   | { type: 'TASK_OVERRIDE'; taskId: string; operator: string; reason: string }
-  | { type: 'NODE_CREATE'; node: CustomNodeRecord };
+  | { type: 'NODE_CREATE'; node: CustomNodeRecord }
+  | { type: 'EDGE_UPDATE'; shiftKey: string; sourceId: string; targetId: string; action: 'add' | 'remove' };
 
 export type WsServerEvent =
   | {
@@ -14,6 +15,7 @@ export type WsServerEvent =
       tasks: Record<string, TaskStateRecord>;
       auditEvents: TaskAuditEvent[];
       customNodes: CustomNodeRecord[];
+      edgeOverrides: EdgeOverrideRecord[];
       dbMode: 'mongodb' | 'fallback';
       clientCount: number;
     }
@@ -25,6 +27,7 @@ export type WsServerEvent =
   | { type: 'SSH_SETTINGS_UPDATED'; settings: any }
   | { type: 'AUTOMATION_RULE_UPDATED'; taskId: string; rule: any }
   | { type: 'NODE_CREATED'; node: CustomNodeRecord }
+  | { type: 'EDGE_UPDATED'; shiftKey: string; sourceId: string; targetId: string; action: 'add' | 'remove' }
   | { type: 'PONG'; timestamp: string };
 
 export class MeridianSocketHub {
@@ -81,12 +84,14 @@ export class MeridianSocketHub {
     const tasks = await dbInstance.getTasks();
     const auditEvents = await dbInstance.getAuditLogs();
     const customNodes = await dbInstance.getCustomNodes();
+    const edgeOverrides = await dbInstance.getEdgeOverrides();
 
     const payload: WsServerEvent = {
       type: 'SYNC_INIT',
       tasks,
       auditEvents,
       customNodes,
+      edgeOverrides,
       dbMode: dbInstance.getMode(),
       clientCount: this.clients.size
     };
@@ -175,6 +180,41 @@ export class MeridianSocketHub {
 
         // Broadcast to everyone
         this.broadcast({ type: 'NODE_CREATED', node: action.node });
+        break;
+      }
+
+      case 'EDGE_UPDATE': {
+        const override: EdgeOverrideRecord = {
+          shiftKey: action.shiftKey,
+          sourceId: action.sourceId,
+          targetId: action.targetId,
+          action: action.action,
+          updatedAt: new Date().toISOString()
+        };
+        if (action.action === 'add') {
+          await dbInstance.saveEdgeOverride(override);
+        } else {
+          await dbInstance.removeEdgeOverride(action.shiftKey, action.sourceId, action.targetId);
+        }
+
+        const auditEvent: TaskAuditEvent = {
+          id: `edge-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+          taskId: action.targetId,
+          action: 'STATUS_CHANGE',
+          operator: 'Operator',
+          reason: `DAG edge ${action.action === 'add' ? 'added' : 'removed'}: ${action.sourceId} -> ${action.targetId}`,
+          timestamp: new Date().toISOString()
+        };
+        await dbInstance.appendAuditLog(auditEvent);
+
+        // Broadcast to everyone
+        this.broadcast({
+          type: 'EDGE_UPDATED',
+          shiftKey: action.shiftKey,
+          sourceId: action.sourceId,
+          targetId: action.targetId,
+          action: action.action
+        });
         break;
       }
     }

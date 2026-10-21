@@ -9,9 +9,14 @@ interface TaskNodeCardProps {
   isHovered: boolean;
   isRelated: boolean;
   isDimmed: boolean;
+  editMode?: boolean;
+  isConnecting?: boolean;
+  isConnectingSource?: boolean;
   onHover: (id: string | null) => void;
   onSelectNode: (id: string) => void;
   onOpenInspector: (id: string) => void;
+  onStartConnect?: (id: string, clientX: number, clientY: number) => void;
+  onPortMouseUp?: (id: string) => void;
   style?: React.CSSProperties;
 }
 
@@ -22,13 +27,19 @@ export function TaskNodeCard({
   isHovered,
   isRelated,
   isDimmed,
+  editMode,
+  isConnecting,
+  isConnectingSource,
   onHover,
   onSelectNode,
   onOpenInspector,
+  onStartConnect,
+  onPortMouseUp,
   style,
 }: TaskNodeCardProps) {
   const isBlocked = derivedStatus === "blocked";
   const isCompleted = node.status === "completed";
+  const isDropTarget = isConnecting && !isConnectingSource;
 
   // Calculate manifest progress if available
   const manifest = node.fileManifest;
@@ -42,11 +53,22 @@ export function TaskNodeCard({
       data-node-id={node.id}
       className={`task-node-card status-${derivedStatus}${isSelected ? " selected" : ""}${
         isDimmed ? " dimmed" : ""
-      }${isHovered ? " hovered" : ""}${isRelated ? " related" : ""}`}
+      }${isHovered ? " hovered" : ""}${isRelated ? " related" : ""}${
+        editMode ? " in-edit-mode" : ""
+      }${isConnectingSource ? " connecting-source" : ""}${isDropTarget ? " drop-target-candidate" : ""}`}
       style={style}
       onMouseEnter={() => onHover(node.id)}
       onMouseLeave={() => onHover(null)}
+      onMouseUp={() => {
+        if (isConnecting && !isConnectingSource && onPortMouseUp) {
+          onPortMouseUp(node.id);
+        }
+      }}
       onClick={() => {
+        if (isConnecting && !isConnectingSource && onPortMouseUp) {
+          onPortMouseUp(node.id);
+          return;
+        }
         onSelectNode(node.id);
         onOpenInspector(node.id);
       }}
@@ -58,6 +80,37 @@ export function TaskNodeCard({
           : `Click to inspect ${node.process} & run diagnostics`
       }
     >
+      {/* Top Input Port: Drop upstream connections here */}
+      {(editMode || isConnecting) && (
+        <div
+          className={`dag-port port-top${isDropTarget ? " target-ready" : ""}`}
+          data-port="target"
+          data-node-id={node.id}
+          onMouseUp={(e) => {
+            e.stopPropagation();
+            onPortMouseUp?.(node.id);
+          }}
+          title={`Connect dependency into ${node.id}`}
+        >
+          <div className="dag-port-inner" />
+        </div>
+      )}
+
+      {/* Bottom Output Port: Drag to downstream tasks */}
+      {editMode && (
+        <div
+          className={`dag-port port-bottom${isConnectingSource ? " source-active" : ""}`}
+          data-port="source"
+          data-node-id={node.id}
+          onMouseDown={(e) => {
+            e.stopPropagation();
+            onStartConnect?.(node.id, e.clientX, e.clientY);
+          }}
+          title={`Drag to connect ${node.id} to another task`}
+        >
+          <div className="dag-port-inner" />
+        </div>
+      )}
       <div className="node-header">
         <div className="node-badge-group">
           <span className="node-id mono">{node.id}</span>

@@ -136,6 +136,57 @@ const server = http.createServer(async (req, res) => {
       return;
     }
 
+    // Get edge overrides
+    if (pathname === '/api/tasks/edges' && req.method === 'GET') {
+      const shiftKey = url.searchParams.get('shift') || undefined;
+      const edges = await dbInstance.getEdgeOverrides(shiftKey);
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ edges }));
+      return;
+    }
+
+    // Add or remove edge override
+    if (pathname === '/api/tasks/edge' && req.method === 'POST') {
+      const body = await parseJsonBody<{
+        shiftKey: string;
+        sourceId: string;
+        targetId: string;
+        action: 'add' | 'remove';
+        operator?: string;
+      }>(req);
+
+      if (!body.shiftKey || !body.sourceId || !body.targetId) {
+        res.writeHead(400, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ error: 'shiftKey, sourceId, and targetId are required' }));
+        return;
+      }
+
+      const action = body.action || 'add';
+      if (action === 'add') {
+        await dbInstance.saveEdgeOverride({
+          shiftKey: body.shiftKey,
+          sourceId: body.sourceId,
+          targetId: body.targetId,
+          action: 'add',
+          updatedAt: new Date().toISOString()
+        });
+      } else {
+        await dbInstance.removeEdgeOverride(body.shiftKey, body.sourceId, body.targetId);
+      }
+
+      socketHub.broadcast({
+        type: 'EDGE_UPDATED',
+        shiftKey: body.shiftKey,
+        sourceId: body.sourceId,
+        targetId: body.targetId,
+        action
+      });
+
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ success: true, action, sourceId: body.sourceId, targetId: body.targetId }));
+      return;
+    }
+
     // SSH settings: Get redacted settings
     if (pathname === '/api/settings/ssh' && req.method === 'GET') {
       const settings = await dbInstance.getPublicSshSettings();

@@ -8,6 +8,12 @@ interface SvgConnectorsProps {
   shiftKey: string;
   hoveredNodeId: string | null;
   getNodeDerivedStatus: (shiftKey: string, taskId: string) => NodeStatus;
+  editMode?: boolean;
+  onRemoveEdge?: (shiftKey: string, sourceId: string, targetId: string) => void;
+  dragConnection?: {
+    sourcePos: { x: number; y: number };
+    currentPos: { x: number; y: number };
+  } | null;
 }
 
 interface EdgePathData {
@@ -17,6 +23,8 @@ interface EdgePathData {
   isSourceCompleted: boolean;
   sourceId: string;
   targetId: string;
+  midX: number;
+  midY: number;
 }
 
 export function SvgConnectors({
@@ -25,6 +33,9 @@ export function SvgConnectors({
   shiftKey,
   hoveredNodeId,
   getNodeDerivedStatus,
+  editMode,
+  onRemoveEdge,
+  dragConnection,
 }: SvgConnectorsProps) {
   const [edges, setEdges] = useState<EdgePathData[]>([]);
 
@@ -89,6 +100,8 @@ export function SvgConnectors({
           isSourceCompleted,
           sourceId,
           targetId: targetNode.id,
+          midX: (x1 + x2) / 2,
+          midY: (y1 + y2) / 2,
         });
       });
     });
@@ -265,6 +278,74 @@ export function SvgConnectors({
           />
         );
       })}
+
+      {/* Active Dragging Connection Line */}
+      {dragConnection && (() => {
+        const x1 = dragConnection.sourcePos.x;
+        const y1 = dragConnection.sourcePos.y;
+        const x2 = dragConnection.currentPos.x;
+        const y2 = dragConnection.currentPos.y;
+        const dy = Math.max(Math.abs(y2 - y1) * 0.45, 28);
+        const dragPath = `M ${x1} ${y1} C ${x1} ${y1 + dy}, ${x2} ${y2 - dy}, ${x2} ${y2}`;
+
+        return (
+          <g className="dag-drag-preview">
+            <path
+              d={dragPath}
+              style={{
+                stroke: "#4FD9D0",
+                strokeWidth: 3.5,
+                strokeDasharray: "7 5",
+                fill: "none",
+                filter: "drop-shadow(0 0 10px rgba(79, 217, 208, 0.95))",
+              }}
+              markerEnd="url(#arrow-cyan)"
+            />
+            <circle
+              cx={x2}
+              cy={y2}
+              r={7}
+              fill="#4FD9D0"
+              style={{ filter: "drop-shadow(0 0 8px #4FD9D0)" }}
+            />
+          </g>
+        );
+      })()}
+
+      {/* Disconnect Buttons for all Edges when in Edit Mode */}
+      {editMode && onRemoveEdge && edges.map((edge) => (
+        <g
+          key={`del-${edge.id}`}
+          className="dag-edge-disconnect-btn"
+          transform={`translate(${edge.midX}, ${edge.midY})`}
+          style={{ cursor: "pointer", pointerEvents: "auto" }}
+          onClick={(e) => {
+            e.stopPropagation();
+            onRemoveEdge(shiftKey, edge.sourceId, edge.targetId);
+          }}
+        >
+          <circle
+            r={12}
+            fill="#0F1422"
+            stroke="#FF4D5E"
+            strokeWidth={1.8}
+            style={{
+              transition: "transform 0.15s ease, fill 0.15s ease",
+              filter: "drop-shadow(0 0 6px rgba(255, 77, 94, 0.6))",
+            }}
+          />
+          <text
+            textAnchor="middle"
+            dominantBaseline="central"
+            fill="#FF4D5E"
+            fontSize={12}
+            fontWeight="bold"
+            style={{ userSelect: "none" }}
+          >
+            ✕
+          </text>
+        </g>
+      ))}
     </svg>
   );
 }

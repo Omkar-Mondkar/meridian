@@ -98,6 +98,18 @@ interface TaskState {
   ) => void;
 
   getNodeDerivedStatus: (shiftKey: string, taskId: string) => NodeStatus;
+
+  addEdge: (
+    shiftKey: string,
+    sourceId: string,
+    targetId: string,
+  ) => { success: boolean; error?: string };
+
+  removeEdge: (
+    shiftKey: string,
+    sourceId: string,
+    targetId: string,
+  ) => void;
 }
 
 export const useTaskStore = create<TaskState>((set, get) => ({
@@ -337,6 +349,104 @@ export const useTaskStore = create<TaskState>((set, get) => ({
 
     set({ checklists });
   },
+
+  addEdge: (shiftKey, sourceId, targetId) => {
+    if (sourceId === targetId) {
+      return { success: false, error: "Cannot link a task to itself." };
+    }
+    const checklists = structuredClone(get().checklists);
+    const rows = checklists[shiftKey] || [];
+    const sourceNode = rows.find((r) => r.id === sourceId);
+    const targetNode = rows.find((r) => r.id === targetId);
+    if (!sourceNode || !targetNode) {
+      return { success: false, error: "Source or Target node not found in current shift." };
+    }
+
+    if (!targetNode.dependsOn) {
+      targetNode.dependsOn = [];
+    }
+    if (targetNode.dependsOn.includes(sourceId)) {
+      return { success: false, error: "Connection already exists between these tasks." };
+    }
+
+    // Cycle check: can sourceId reach targetId by following existing upstream dependencies?
+    // If sourceId depends on targetId (or any ancestor of sourceId is targetId), adding sourceId as dependency of targetId creates a cycle.
+    const visited = new Set<string>();
+    const queue = [sourceId];
+    let hasCycle = false;
+
+    while (queue.length > 0) {
+      const currId = queue.shift()!;
+      if (currId === targetId) {
+        hasCycle = true;
+        break;
+      }
+      visited.add(currId);
+      const currNode = rows.find((r) => r.id === currId);
+      if (currNode && currNode.dependsOn) {
+        for (const parentId of currNode.dependsOn) {
+          if (!visited.has(parentId)) {
+            queue.push(parentId);
+          }
+        }
+      }
+    }
+
+    if (hasCycle) {
+      return {
+        success: false,
+        error: `Circular dependency detected: Task '${sourceId}' already depends on '${targetId}'!`,
+      };
+    }
+
+    targetNode.dependsOn.push(sourceId);
+
+    const event: AuditEvent = {
+      taskId: targetId,
+      shift: shiftKey,
+      process: targetNode.process,
+      completedBy: get().currentPersona.name,
+      role: get().currentPersona.role,
+      completedAt: new Date().toISOString(),
+      action: "advance_status",
+      reason: `DAG dependency added: ${sourceId} ➔ ${targetId}`,
+    };
+
+    set((s) => ({
+      checklists,
+      auditLog: [event, ...s.auditLog],
+    }));
+
+    syncClient.sendEdgeUpdate(shiftKey, sourceId, targetId, "add");
+    return { success: true };
+  },
+
+  removeEdge: (shiftKey, sourceId, targetId) => {
+    const checklists = structuredClone(get().checklists);
+    const rows = checklists[shiftKey] || [];
+    const targetNode = rows.find((r) => r.id === targetId);
+    if (!targetNode || !targetNode.dependsOn) return;
+
+    targetNode.dependsOn = targetNode.dependsOn.filter((id) => id !== sourceId);
+
+    const event: AuditEvent = {
+      taskId: targetId,
+      shift: shiftKey,
+      process: targetNode.process,
+      completedBy: get().currentPersona.name,
+      role: get().currentPersona.role,
+      completedAt: new Date().toISOString(),
+      action: "advance_status",
+      reason: `DAG dependency removed: ${sourceId} ✕ ${targetId}`,
+    };
+
+    set((s) => ({
+      checklists,
+      auditLog: [event, ...s.auditLog],
+    }));
+
+    syncClient.sendEdgeUpdate(shiftKey, sourceId, targetId, "remove");
+  },
 }));
 
 // Wire real-time WebSocket subscriber
@@ -386,6 +496,24 @@ syncClient.subscribe((event) => {
         if (!checklists[shift]) checklists[shift] = [];
         if (!checklists[shift].some((x) => x.id === node.id)) {
           checklists[shift].push({ ...node, isCustom: true });
+        }
+      }
+    }
+
+    // Merge edge overrides
+    if (payload.edgeOverrides && Array.isArray(payload.edgeOverrides)) {
+      for (const override of payload.edgeOverrides) {
+        const rows = checklists[override.shiftKey] || [];
+        const target = rows.find((r) => r.id === override.targetId);
+        if (target) {
+          if (!target.dependsOn) target.dependsOn = [];
+          if (override.action === "add") {
+            if (!target.dependsOn.includes(override.sourceId)) {
+              target.dependsOn.push(override.sourceId);
+            }
+          } else if (override.action === "remove") {
+            target.dependsOn = target.dependsOn.filter((id) => id !== override.sourceId);
+          }
         }
       }
     }
@@ -538,5 +666,23 @@ syncClient.subscribe((event) => {
       }
     }
     useTaskStore.setState({ checklists });
+  } else if (event.type === "EDGE_UPDATED") {
+    const { shiftKey, sourceId, targetId, action } = event.data || {};
+    if (!shiftKey || !sourceId || !targetId) return;
+
+    const checklists = structuredClone(useTaskStore.getState().checklists);
+    const rows = checklists[shiftKey] || [];
+    const target = rows.find((r) => r.id === targetId);
+    if (target) {
+      if (!target.dependsOn) target.dependsOn = [];
+      if (action === "add") {
+        if (!target.dependsOn.includes(sourceId)) {
+          target.dependsOn.push(sourceId);
+        }
+      } else if (action === "remove") {
+        target.dependsOn = target.dependsOn.filter((id) => id !== sourceId);
+      }
+      useTaskStore.setState({ checklists });
+    }
   }
 });

@@ -84,12 +84,21 @@ export interface TaskAutomationRule {
   updatedAt: string;
 }
 
+export interface EdgeOverrideRecord {
+  shiftKey: string;
+  sourceId: string;
+  targetId: string;
+  action: 'add' | 'remove';
+  updatedAt: string;
+}
+
 interface LocalStateFile {
   tasks: Record<string, TaskStateRecord>;
   auditEvents: TaskAuditEvent[];
   customNodes: CustomNodeRecord[];
   systemSettings: Record<string, any>;
   automationRules: Record<string, TaskAutomationRule>;
+  edgeOverrides: EdgeOverrideRecord[];
 }
 
 export class MeridianDatabase {
@@ -102,7 +111,8 @@ export class MeridianDatabase {
     auditEvents: [],
     customNodes: [],
     systemSettings: {},
-    automationRules: {}
+    automationRules: {},
+    edgeOverrides: []
   };
 
   constructor() {
@@ -128,7 +138,8 @@ export class MeridianDatabase {
           auditEvents: parsed.auditEvents || [],
           customNodes: parsed.customNodes || [],
           systemSettings: parsed.systemSettings || {},
-          automationRules: parsed.automationRules || {}
+          automationRules: parsed.automationRules || {},
+          edgeOverrides: parsed.edgeOverrides || []
         };
       }
     } catch (err) {
@@ -179,6 +190,7 @@ export class MeridianDatabase {
       const nodesCol = this.db.collection<CustomNodeRecord>('custom_nodes');
       const settingsCol = this.db.collection('system_settings');
       const rulesCol = this.db.collection<TaskAutomationRule>('automation_rules');
+      const edgesCol = this.db.collection<EdgeOverrideRecord>('edge_overrides');
 
       const tasks = await tasksCol.find({}).toArray();
       for (const t of tasks) {
@@ -199,6 +211,8 @@ export class MeridianDatabase {
       for (const r of rules) {
         this.memoryCache.automationRules[r.taskId] = r;
       }
+
+      this.memoryCache.edgeOverrides = await edgesCol.find({}).toArray();
     } catch (err) {
       console.warn('[DB] Error during initial MongoDB sync:', err);
     }
@@ -470,6 +484,62 @@ export class MeridianDatabase {
         );
       } catch (err) {
         console.error('[DB] Mongo saveAutomationRule failed, saved in fallback:', err);
+      }
+    }
+  }
+
+  async getEdgeOverrides(shiftKey?: string): Promise<EdgeOverrideRecord[]> {
+    if (this.mode === 'mongodb' && this.db) {
+      try {
+        const query = shiftKey ? { shiftKey } : {};
+        return await this.db.collection<EdgeOverrideRecord>('edge_overrides').find(query).toArray();
+      } catch (err) {
+        console.warn('[DB] Mongo getEdgeOverrides failed, using cache:', err);
+      }
+    }
+    if (shiftKey) {
+      return this.memoryCache.edgeOverrides.filter((e) => e.shiftKey === shiftKey);
+    }
+    return [...this.memoryCache.edgeOverrides];
+  }
+
+  async saveEdgeOverride(override: EdgeOverrideRecord): Promise<void> {
+    override.updatedAt = new Date().toISOString();
+    // Remove conflicting override if exists
+    this.memoryCache.edgeOverrides = this.memoryCache.edgeOverrides.filter(
+      (e) => !(e.shiftKey === override.shiftKey && e.sourceId === override.sourceId && e.targetId === override.targetId)
+    );
+    this.memoryCache.edgeOverrides.push(override);
+    this.persistFallbackToDisk();
+
+    if (this.mode === 'mongodb' && this.db) {
+      try {
+        await this.db.collection('edge_overrides').updateOne(
+          { shiftKey: override.shiftKey, sourceId: override.sourceId, targetId: override.targetId },
+          { $set: override },
+          { upsert: true }
+        );
+      } catch (err) {
+        console.error('[DB] Mongo saveEdgeOverride failed, saved in fallback:', err);
+      }
+    }
+  }
+
+  async removeEdgeOverride(shiftKey: string, sourceId: string, targetId: string): Promise<void> {
+    this.memoryCache.edgeOverrides = this.memoryCache.edgeOverrides.filter(
+      (e) => !(e.shiftKey === shiftKey && e.sourceId === sourceId && e.targetId === targetId)
+    );
+    this.persistFallbackToDisk();
+
+    if (this.mode === 'mongodb' && this.db) {
+      try {
+        await this.db.collection('edge_overrides').deleteOne({
+          shiftKey,
+          sourceId,
+          targetId
+        });
+      } catch (err) {
+        console.error('[DB] Mongo removeEdgeOverride failed:', err);
       }
     }
   }

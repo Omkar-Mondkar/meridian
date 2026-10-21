@@ -25,16 +25,34 @@ export interface RemoteAuditEvent {
   timestamp: string;
 }
 
+export interface RemoteEdgeOverride {
+  shiftKey: string;
+  sourceId: string;
+  targetId: string;
+  action: 'add' | 'remove';
+  updatedAt: string;
+}
+
 export interface SyncInitPayload {
   tasks: Record<string, RemoteTaskRecord>;
   auditEvents: RemoteAuditEvent[];
   customNodes: any[];
+  edgeOverrides?: RemoteEdgeOverride[];
   dbMode: 'mongodb' | 'fallback';
   clientCount: number;
 }
 
 type SyncListener = (event: {
-  type: 'SYNC_INIT' | 'TASK_UPDATED' | 'TASK_OVERRIDDEN' | 'NODE_CREATED' | 'STATUS_CHANGE';
+  type:
+    | 'SYNC_INIT'
+    | 'TASK_UPDATED'
+    | 'TASK_OVERRIDDEN'
+    | 'NODE_CREATED'
+    | 'EDGE_UPDATED'
+    | 'STATUS_CHANGE'
+    | 'TASK_COMPLETED_BY_POLLER'
+    | 'POLLER_STATUS'
+    | 'TASK_METRICS_UPDATED';
   data?: any;
 }) => void;
 
@@ -191,6 +209,20 @@ class MeridianSyncClient {
         JSON.stringify({
           type: 'NODE_CREATE',
           node
+        })
+      );
+    }
+  }
+
+  sendEdgeUpdate(shiftKey: string, sourceId: string, targetId: string, action: 'add' | 'remove') {
+    if (this.ws && this.ws.readyState === WebSocket.OPEN) {
+      this.ws.send(
+        JSON.stringify({
+          type: 'EDGE_UPDATE',
+          shiftKey,
+          sourceId,
+          targetId,
+          action
         })
       );
     }

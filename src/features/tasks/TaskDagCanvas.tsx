@@ -14,6 +14,10 @@ export function TaskDagCanvas() {
     setInspectorOpen,
     setNodeBuilderOpen,
     getNodeDerivedStatus,
+    editMode,
+    setEditMode,
+    addEdge,
+    removeEdge,
   } = useTaskStore();
 
   const viewportRef = useRef<HTMLDivElement>(null);
@@ -27,7 +31,25 @@ export function TaskDagCanvas() {
 
   const [hoveredNodeId, setHoveredNodeId] = useState<string | null>(null);
 
+  // Interactive Drag-and-Drop Edge Creation State
+  const [connectingFrom, setConnectingFrom] = useState<{
+    sourceId: string;
+    startPos: { x: number; y: number };
+  } | null>(null);
+  const [mousePos, setMousePos] = useState<{ x: number; y: number } | null>(null);
+  const [connectError, setConnectError] = useState<string | null>(null);
+
   const rows = checklists[selectedShift] || [];
+
+  // Helper to convert screen coordinates to canvas plane coordinates
+  const clientToCanvas = (clientX: number, clientY: number): { x: number; y: number } => {
+    if (!canvasInnerRef.current) return { x: 0, y: 0 };
+    const rect = canvasInnerRef.current.getBoundingClientRect();
+    return {
+      x: (clientX - rect.left) / zoom,
+      y: (clientY - rect.top) / zoom,
+    };
+  };
 
   // Compute related nodes (Hovered node + all its direct parents + all its direct children)
   const relatedNodeIds = useMemo(() => {
@@ -50,11 +72,40 @@ export function TaskDagCanvas() {
     return set;
   }, [hoveredNodeId, rows]);
 
+  // Start connecting from output port of source node
+  function handleStartConnect(sourceId: string, clientX: number, clientY: number) {
+    const sourceNode = rows.find((r) => r.id === sourceId);
+    if (!sourceNode) return;
+    const pos = getNodeCoordinates(sourceNode, rows, selectedShift);
+    const startPos = {
+      x: pos.x + 125, // center of 250px card
+      y: pos.y + 84,  // bottom of card
+    };
+    setConnectingFrom({ sourceId, startPos });
+    setMousePos(clientToCanvas(clientX, clientY));
+    setConnectError(null);
+  }
+
+  // Complete connection on drop onto target port or node
+  function handlePortMouseUp(targetId: string) {
+    if (connectingFrom && connectingFrom.sourceId !== targetId) {
+      const res = addEdge(selectedShift, connectingFrom.sourceId, targetId);
+      if (!res.success && res.error) {
+        setConnectError(res.error);
+        setTimeout(() => setConnectError(null), 4000);
+      }
+    }
+    setConnectingFrom(null);
+    setMousePos(null);
+  }
+
   // Pan / Drag Handlers
   function handleMouseDown(e: React.MouseEvent) {
-    // Only drag on canvas background, not inside cards or buttons
+    // Only drag on canvas background, not inside cards, ports, or buttons
     if (
       (e.target as HTMLElement).closest(".task-node-card") ||
+      (e.target as HTMLElement).closest(".dag-port") ||
+      (e.target as HTMLElement).closest(".dag-edge-disconnect-btn") ||
       (e.target as HTMLElement).closest("button") ||
       (e.target as HTMLElement).closest("input")
     ) {
@@ -70,6 +121,10 @@ export function TaskDagCanvas() {
   }
 
   function handleMouseMove(e: React.MouseEvent) {
+    if (connectingFrom) {
+      setMousePos(clientToCanvas(e.clientX, e.clientY));
+      return;
+    }
     if (!isDragging) return;
     const dx = e.clientX - dragStartRef.current.mouseX;
     const dy = e.clientY - dragStartRef.current.mouseY;
@@ -79,7 +134,23 @@ export function TaskDagCanvas() {
     });
   }
 
-  function handleMouseUp() {
+  function handleMouseUp(e?: React.MouseEvent) {
+    if (connectingFrom) {
+      // Check if dropped onto a node card
+      if (e) {
+        const targetCard = (e.target as HTMLElement).closest<HTMLElement>("[data-node-id]");
+        if (targetCard) {
+          const targetId = targetCard.getAttribute("data-node-id");
+          if (targetId && targetId !== connectingFrom.sourceId) {
+            handlePortMouseUp(targetId);
+            return;
+          }
+        }
+      }
+      setConnectingFrom(null);
+      setMousePos(null);
+      return;
+    }
     setIsDragging(false);
   }
 
@@ -169,6 +240,18 @@ export function TaskDagCanvas() {
           </div>
 
           <button
+            className={`dag-btn${editMode ? " primary active-edit-btn" : ""}`}
+            onClick={() => {
+              setEditMode(!editMode);
+              setConnectingFrom(null);
+              setMousePos(null);
+            }}
+            title="Toggle Drag & Drop DAG Editing Mode"
+          >
+            <span>{editMode ? "✓ Done Editing" : "✏️ Edit DAG"}</span>
+          </button>
+
+          <button
             className="dag-btn primary"
             onClick={() => setInspectorOpen(true)}
             title="Inspect ~200 NetApp Exchange Files"
@@ -188,9 +271,29 @@ export function TaskDagCanvas() {
         </div>
       </div>
 
+      {/* Edit Mode Helper & Error Notification Banner */}
+      {editMode && (
+        <div className="dag-edit-mode-banner">
+          <span className="banner-icon">🔧</span>
+          <span className="banner-text">
+            <strong>DAG Builder Active:</strong> Drag from bottom port (○) of any node and drop onto top port (○) of another to link dependency. Click (✕) on any edge to disconnect.
+          </span>
+          {connectError && (
+            <span className="banner-error">
+              ⚠️ {connectError}
+            </span>
+          )}
+        </div>
+      )}
+      {!editMode && connectError && (
+        <div className="dag-edit-mode-banner error-only">
+          <span className="banner-error">⚠️ {connectError}</span>
+        </div>
+      )}
+
       {/* Infinite Draggable Viewport (Excalidraw Canvas) */}
       <div
-        className={`dag-infinite-viewport${isDragging ? " is-dragging" : ""}`}
+        className={`dag-infinite-viewport${isDragging ? " is-dragging" : ""}${connectingFrom ? " is-connecting" : ""}`}
         ref={viewportRef}
         onMouseDown={handleMouseDown}
         onMouseMove={handleMouseMove}
@@ -236,6 +339,13 @@ export function TaskDagCanvas() {
             shiftKey={selectedShift}
             hoveredNodeId={hoveredNodeId}
             getNodeDerivedStatus={getNodeDerivedStatus}
+            editMode={editMode}
+            onRemoveEdge={removeEdge}
+            dragConnection={
+              connectingFrom && mousePos
+                ? { sourcePos: connectingFrom.startPos, currentPos: mousePos }
+                : null
+            }
           />
 
           {/* Direct Absolutely Positioned Node Cards */}
@@ -255,12 +365,17 @@ export function TaskDagCanvas() {
                 isHovered={isHovered}
                 isRelated={isRelated}
                 isDimmed={isDimmed}
+                editMode={editMode}
+                isConnecting={Boolean(connectingFrom)}
+                isConnectingSource={connectingFrom?.sourceId === node.id}
                 onHover={setHoveredNodeId}
                 onSelectNode={setSelectedTaskId}
                 onOpenInspector={() => {
                   setSelectedTaskId(node.id);
                   setInspectorOpen(true);
                 }}
+                onStartConnect={handleStartConnect}
+                onPortMouseUp={handlePortMouseUp}
                 style={{
                   position: "absolute",
                   left: pos.x,
