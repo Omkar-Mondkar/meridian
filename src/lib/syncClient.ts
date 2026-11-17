@@ -50,6 +50,8 @@ type SyncListener = (event: {
     | 'TASK_UPDATED'
     | 'TASK_OVERRIDDEN'
     | 'NODE_CREATED'
+    | 'NODE_UPDATED'
+    | 'NODE_DELETED'
     | 'EDGE_UPDATED'
     | 'STATUS_CHANGE'
     | 'TASK_COMPLETED_BY_POLLER'
@@ -244,6 +246,31 @@ class MeridianSyncClient {
         JSON.stringify({
           type: 'NODE_CREATE',
           node,
+          operatorId: this.operatorId
+        })
+      );
+    }
+  }
+
+  sendNodeUpdate(node: any) {
+    if (this.ws && this.ws.readyState === WebSocket.OPEN) {
+      this.ws.send(
+        JSON.stringify({
+          type: 'NODE_UPDATE',
+          node,
+          operatorId: this.operatorId
+        })
+      );
+    }
+  }
+
+  sendNodeDelete(shiftKey: string, nodeId: string) {
+    if (this.ws && this.ws.readyState === WebSocket.OPEN) {
+      this.ws.send(
+        JSON.stringify({
+          type: 'NODE_DELETE',
+          shiftKey,
+          nodeId,
           operatorId: this.operatorId
         })
       );

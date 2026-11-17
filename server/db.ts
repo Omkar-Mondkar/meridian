@@ -25,19 +25,27 @@ export interface TaskAuditEvent {
 export interface CustomNodeRecord {
   id: string;
   time: string;
-  title: string;
+  title?: string;
   process: string;
-  priority: 'CRITICAL' | 'HIGH' | 'MEDIUM' | 'LOW';
-  role: 'L1' | 'L2' | 'VP';
-  status: 'pending' | 'in_progress' | 'completed' | 'blocked';
+  priority: 'CRITICAL' | 'HIGH' | 'MEDIUM' | 'LOW' | 'critical' | 'high' | 'medium' | 'low';
+  role: string;
+  mode?: string;
+  executor?: string;
+  status: 'pending' | 'open' | 'in_progress' | 'completed' | 'blocked';
   dependsOn?: string[];
   pipeline?: string;
+  shift?: string;
+  desc?: string;
   verification?: {
+    type?: string;
     serverIp?: string;
     logPath?: string;
     grepPattern?: string;
+    grepRegex?: string;
   };
-  createdAt: string;
+  isCustom?: boolean;
+  createdAt?: string;
+  updatedAt?: string;
 }
 
 export interface SshCredentialRecord {
@@ -456,9 +464,16 @@ export class MeridianDatabase {
   async saveCustomNode(node: CustomNodeRecord): Promise<void> {
     const existingIdx = this.memoryCache.customNodes.findIndex((n) => n.id === node.id);
     if (existingIdx >= 0) {
-      this.memoryCache.customNodes[existingIdx] = node;
+      this.memoryCache.customNodes[existingIdx] = {
+        ...this.memoryCache.customNodes[existingIdx],
+        ...node,
+        updatedAt: new Date().toISOString()
+      };
     } else {
-      this.memoryCache.customNodes.push(node);
+      this.memoryCache.customNodes.push({
+        ...node,
+        createdAt: node.createdAt || new Date().toISOString()
+      });
     }
     this.persistFallbackToDisk();
 
@@ -473,6 +488,23 @@ export class MeridianDatabase {
         console.error('[DB] Mongo saveCustomNode failed, saved in fallback:', err);
       }
     }
+  }
+
+  async deleteCustomNode(id: string): Promise<boolean> {
+    const existingIdx = this.memoryCache.customNodes.findIndex((n) => n.id === id);
+    if (existingIdx >= 0) {
+      this.memoryCache.customNodes.splice(existingIdx, 1);
+      this.persistFallbackToDisk();
+    }
+
+    if (this.mode === 'mongodb' && this.db) {
+      try {
+        await this.db.collection('custom_nodes').deleteOne({ id });
+      } catch (err) {
+        console.error('[DB] Mongo deleteCustomNode failed, deleted from fallback:', err);
+      }
+    }
+    return existingIdx >= 0;
   }
 
   async getPublicSshSettings(): Promise<PublicSshSettings> {

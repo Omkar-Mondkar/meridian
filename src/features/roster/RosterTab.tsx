@@ -1,4 +1,5 @@
 import React from "react";
+import { Crown, Award, ShieldCheck, Zap } from "lucide-react";
 import {
   PERSONNEL,
   LEADERSHIP,
@@ -49,8 +50,9 @@ export function RosterTab() {
             {/* Level 1: Principal */}
             {principal && (
               <div className="hierarchy-tier tier-principal">
-                <div className="tier-badge principal-badge">
-                  <span className="crown-icon">👑</span> PRINCIPAL
+                <div className="tier-badge principal-badge" style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
+                  <Crown size={13} className="crown-icon" />
+                  <span>PRINCIPAL</span>
                 </div>
                 <div className="leader-card principal-card">
                   <div className="leader-avatar-wrap">
@@ -70,8 +72,9 @@ export function RosterTab() {
                     </div>
                     <div className="leader-role">{principal.role}</div>
                     <div className="leader-meta">
-                      <span className="meta-tag">
-                        🛡 {principal.coverage || "24×7 Escalation"}
+                      <span className="meta-tag" style={{ display: "inline-flex", alignItems: "center", gap: 5 }}>
+                        <ShieldCheck size={12} />
+                        <span>{principal.coverage || "24×7 Escalation"}</span>
                       </span>
                     </div>
                   </div>
@@ -89,8 +92,9 @@ export function RosterTab() {
             {/* Level 2: Team Leader */}
             {teamLeader && (
               <div className="hierarchy-tier tier-lead">
-                <div className="tier-badge lead-badge">
-                  <span className="badge-icon">🎖</span> TEAM LEADER
+                <div className="tier-badge lead-badge" style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
+                  <Award size={13} className="badge-icon" />
+                  <span>TEAM LEADER</span>
                 </div>
                 <div className="leader-card lead-card">
                   <div className="leader-avatar-wrap">
@@ -110,8 +114,9 @@ export function RosterTab() {
                     </div>
                     <div className="leader-role">{teamLeader.role}</div>
                     <div className="leader-meta">
-                      <span className="meta-tag">
-                        ⚡ {teamLeader.coverage || "All-Shift Coordination"}
+                      <span className="meta-tag" style={{ display: "inline-flex", alignItems: "center", gap: 5 }}>
+                        <Zap size={12} />
+                        <span>{teamLeader.coverage || "All-Shift Coordination"}</span>
                       </span>
                     </div>
                   </div>

@@ -1,0 +1,203 @@
+/* =========================================================
+   MERIDIAN — Node Builder Modal Responsive Styles
+   ========================================================= */
+
+.node-builder-form {
+  padding: 20px 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  overflow-y: auto;
+  max-height: calc(88vh - 110px);
+  box-sizing: border-box;
+}
+
+.node-builder-field {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  gap: 5px;
+}
+
+.node-builder-label {
+  font-size: 11px;
+  color: var(--text-lo);
+  font-weight: 500;
+  letter-spacing: 0.02em;
+}
+
+.node-builder-input {
+  width: 100%;
+  box-sizing: border-box;
+  min-width: 0;
+  padding: 8px 12px;
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  color: var(--text-hi);
+  font-size: 12px;
+  outline: none;
+  transition: border-color 0.2s, box-shadow 0.2s;
+}
+
+.node-builder-input:focus {
+  border-color: var(--cyan);
+  box-shadow: 0 0 10px rgba(79, 217, 208, 0.25);
+}
+
+.node-builder-input:disabled {
+  opacity: 0.65;
+  cursor: not-allowed;
+}
+
+/* Row 1: ID, Process Name, Time */
+.node-builder-row-top {
+  display: grid;
+  grid-template-columns: 85px minmax(0, 1fr) 110px;
+  gap: 12px;
+  align-items: start;
+}
+
+/* Row 2: Pipeline, Priority, Mode */
+.node-builder-row-triplet {
+  display: grid;
+  grid-template-columns: 1.2fr 1fr 1fr;
+  gap: 12px;
+  align-items: start;
+}
+
+/* Row 3: Executor Team, Role */
+.node-builder-row-pair {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+  align-items: start;
+}
+
+/* Prerequisite Dependencies Multi-select */
+.node-builder-deps-container {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 10px;
+  background: rgba(0, 0, 0, 0.25);
+  border: 1px solid var(--panel-border);
+  border-radius: 8px;
+  max-height: 120px;
+  overflow-y: auto;
+}
+
+/* Telemetry Verification Prototype Box */
+.node-builder-telemetry-box {
+  padding: 14px;
+  border-radius: 8px;
+  background: rgba(79, 217, 208, 0.04);
+  border: 1px solid rgba(79, 217, 208, 0.2);
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-width: 0;
+}
+
+.node-builder-telemetry-header {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--cyan);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.node-builder-telemetry-row {
+  display: grid;
+  grid-template-columns: 160px minmax(0, 1fr);
+  gap: 12px;
+  align-items: start;
+}
+
+/* Form Actions */
+.node-builder-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-top: 6px;
+}
+
+.node-builder-actions-right {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.node-builder-delete-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: rgba(239, 68, 68, 0.14);
+  border: 1px solid rgba(239, 68, 68, 0.38);
+  color: #fca5a5;
+  border-radius: 6px;
+  padding: 6px 12px;
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.node-builder-delete-btn:hover {
+  background: rgba(239, 68, 68, 0.25);
+  border-color: #ef4444;
+  color: #ffffff;
+}
+
+/* ---- Mobile Responsiveness (< 600px) ---- */
+@media (max-width: 600px) {
+  .node-builder-form {
+    padding: 14px 16px;
+    gap: 12px;
+  }
+
+  /* Process Name takes its own full-width row at the top */
+  .node-builder-row-top {
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+  }
+
+  .node-builder-row-top .field-process-name {
+    grid-column: 1 / -1;
+    order: -1;
+  }
+
+  .node-builder-row-triplet {
+    grid-template-columns: 1fr;
+    gap: 10px;
+  }
+
+  .node-builder-row-pair {
+    grid-template-columns: 1fr;
+    gap: 10px;
+  }
+
+  .node-builder-telemetry-row {
+    grid-template-columns: 1fr;
+    gap: 10px;
+  }
+
+  .node-builder-actions {
+    flex-direction: column-reverse;
+    gap: 8px;
+  }
+
+  .node-builder-actions-right {
+    width: 100%;
+    flex-direction: column-reverse;
+    gap: 8px;
+  }
+
+  .node-builder-actions button,
+  .node-builder-actions-right button {
+    width: 100%;
+    justify-content: center;
+  }
+}

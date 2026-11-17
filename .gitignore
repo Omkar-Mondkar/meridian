@@ -2,7 +2,7 @@
 node_modules/
 .pnp
 .pnp.js
-
+.agents
 # Production build outputs
 dist/
 dist-ssr/
@@ -12,7 +12,7 @@ out/
 # Diagnostic / TypeScript / Linter
 *.tsbuildinfo
 .eslintcache
-
+openspec
 # Logs
 logs
 *.log

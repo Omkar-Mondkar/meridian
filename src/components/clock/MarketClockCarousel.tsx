@@ -2,6 +2,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { getTZParts, toMin, pad2 } from '../../engines/timeSync';
 import { MARKETS, type Market } from '../../data/markets';
 import { AnalogClock } from './AnalogClock';
+import { ChevronLeft, ChevronRight, RefreshCw } from 'lucide-react';
 
 interface MarketState {
   parts: ReturnType<typeof getTZParts>;
@@ -120,7 +121,23 @@ export function MarketClockCarousel({
               onClick={() => gotoPage(i, true)}
             >
               {i === 0 && <AnalogClock />}
-              <div className="page-flag">{m.flag}</div>
+              <div className="page-flag" style={{ margin: "2px 0 4px" }}>
+                <span
+                  style={{
+                    fontSize: 11,
+                    fontWeight: 800,
+                    letterSpacing: "0.08em",
+                    padding: "2px 8px",
+                    borderRadius: 4,
+                    background: "rgba(79, 217, 208, 0.12)",
+                    border: "1px solid rgba(79, 217, 208, 0.3)",
+                    color: "var(--cyan)",
+                    display: "inline-block",
+                  }}
+                >
+                  {m.countryCode}
+                </span>
+              </div>
               <div className="page-market">{m.name}</div>
               <div className={`page-time mono`} id={`page-time-${m.key}`}>{timeStr}</div>
               <div className="page-date" id={`page-date-${m.key}`}>{dateStr}</div>
@@ -140,7 +157,10 @@ export function MarketClockCarousel({
           title="Previous market"
           onClick={() => gotoPage(activePage - 1, true)}
           aria-label="Previous market"
-        >‹</button>
+          style={{ display: "inline-flex", alignItems: "center", justifyContent: "center" }}
+        >
+          <ChevronLeft size={13} />
+        </button>
 
         <div className="page-dots" id="pageDots">
           {MARKETS.map((m, i) => (
@@ -162,14 +182,21 @@ export function MarketClockCarousel({
           title="Next market"
           onClick={() => gotoPage(activePage + 1, true)}
           aria-label="Next market"
-        >›</button>
+          style={{ display: "inline-flex", alignItems: "center", justifyContent: "center" }}
+        >
+          <ChevronRight size={13} />
+        </button>
 
         <button
           className={`auto-pill${autoFollow ? ' active' : ''}`}
           id="autoFollowBtn"
           title="Auto-follow whichever market is live"
           onClick={() => { setAutoFollow(true); }}
-        >⟳ AUTO</button>
+          style={{ display: "inline-flex", alignItems: "center", gap: 4 }}
+        >
+          <RefreshCw size={10} />
+          <span>AUTO</span>
+        </button>
       </div>
     </div>
   );

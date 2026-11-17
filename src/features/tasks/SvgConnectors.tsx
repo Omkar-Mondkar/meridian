@@ -334,16 +334,8 @@ export function SvgConnectors({
               filter: "drop-shadow(0 0 6px rgba(255, 77, 94, 0.6))",
             }}
           />
-          <text
-            textAnchor="middle"
-            dominantBaseline="central"
-            fill="#FF4D5E"
-            fontSize={12}
-            fontWeight="bold"
-            style={{ userSelect: "none" }}
-          >
-            ✕
-          </text>
+          <line x1={-4} y1={-4} x2={4} y2={4} stroke="#FF4D5E" strokeWidth={2} strokeLinecap="round" />
+          <line x1={4} y1={-4} x2={-4} y2={4} stroke="#FF4D5E" strokeWidth={2} strokeLinecap="round" />
         </g>
       ))}
     </svg>

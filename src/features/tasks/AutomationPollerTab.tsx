@@ -2,6 +2,16 @@ import React, { useState, useEffect } from "react";
 import { useTaskStore } from "../../stores/useTaskStore";
 import { usePermissions } from "../../hooks/usePermissions";
 import { syncClient } from "../../lib/syncClient";
+import { Select } from "../../components/ui/Select";
+import {
+  Settings,
+  AlertTriangle,
+  Check,
+  Save,
+  Terminal,
+  Zap,
+  X,
+} from "lucide-react";
 
 interface AutomationPollerTabProps {
   taskId: string;
@@ -253,7 +263,7 @@ export function AutomationPollerTab({
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
           <div>
             <h3 style={{ fontSize: 14, fontWeight: 700, color: "var(--text-hi)", display: "flex", alignItems: "center", gap: 8 }}>
-              <span>⚙</span> Automation & Verification Rules
+              <Settings size={15} style={{ color: "var(--cyan)" }} /> Automation & Verification Rules
             </h3>
             <p style={{ fontSize: 11, color: "var(--text-lo)", marginTop: 2 }}>
               Configure SSH script path and criteria for task <strong className="mono" style={{ color: "var(--cyan)" }}>{taskId}</strong>
@@ -323,14 +333,16 @@ export function AutomationPollerTab({
         </div>
 
         {saveError && (
-          <div style={{ padding: "8px 12px", background: "rgba(255, 77, 94, 0.1)", border: "1px solid rgba(255, 77, 94, 0.3)", borderRadius: 6, color: "var(--red)", fontSize: 11 }}>
-            ⚠ {saveError}
+          <div style={{ display: "flex", alignItems: "center", gap: 6, padding: "8px 12px", background: "rgba(255, 77, 94, 0.1)", border: "1px solid rgba(255, 77, 94, 0.3)", borderRadius: 6, color: "var(--red)", fontSize: 11 }}>
+            <AlertTriangle size={13} style={{ flexShrink: 0 }} />
+            <span>{saveError}</span>
           </div>
         )}
 
         {saveSuccess && (
-          <div style={{ padding: "8px 12px", background: "rgba(51, 209, 122, 0.1)", border: "1px solid rgba(51, 209, 122, 0.3)", borderRadius: 6, color: "var(--green)", fontSize: 11 }}>
-            ✓ Automation rule updated and synced to background poller!
+          <div style={{ display: "flex", alignItems: "center", gap: 6, padding: "8px 12px", background: "rgba(51, 209, 122, 0.1)", border: "1px solid rgba(51, 209, 122, 0.3)", borderRadius: 6, color: "var(--green)", fontSize: 11 }}>
+            <Check size={13} style={{ flexShrink: 0 }} />
+            <span>Automation rule updated and synced to background poller!</span>
           </div>
         )}
 
@@ -412,24 +424,17 @@ export function AutomationPollerTab({
             <label style={{ fontSize: 11, color: "var(--text-lo)", display: "block", marginBottom: 4, fontWeight: 600 }}>
               VERIFICATION SUCCESS EVALUATION MODE
             </label>
-            <select
+            <Select
+              size="sm"
               value={rule.matchMode}
-              onChange={(e) => setRule({ ...rule, matchMode: e.target.value as any })}
-              style={{
-                width: "100%",
-                padding: "8px 12px",
-                background: "rgba(255, 255, 255, 0.05)",
-                border: "1px solid rgba(255, 255, 255, 0.12)",
-                borderRadius: 6,
-                color: "var(--text-hi)",
-                fontSize: 12,
-              }}
-            >
-              <option value="exit_code_only">Exit Code Only (Process returns 0)</option>
-              <option value="stdout_regex">Exit Code 0 + Stdout Matches Regular Expression</option>
-              <option value="stdout_contains">Exit Code 0 + Stdout Contains Substring</option>
-              <option value="stdout_json_metric">Exit Code 0 + Stdout JSON Metric Value</option>
-            </select>
+              onChange={(val) => setRule({ ...rule, matchMode: val as any })}
+              options={[
+                { value: "exit_code_only", label: "Exit Code Only (Process returns 0)" },
+                { value: "stdout_regex", label: "Exit Code 0 + Stdout Matches Regular Expression" },
+                { value: "stdout_contains", label: "Exit Code 0 + Stdout Contains Substring" },
+                { value: "stdout_json_metric", label: "Exit Code 0 + Stdout JSON Metric Value" },
+              ]}
+            />
           </div>
 
           {/* Regex / Substring Match Pattern */}
@@ -548,9 +553,14 @@ export function AutomationPollerTab({
               cursor: canManageAutomation ? "pointer" : "not-allowed",
               opacity: canManageAutomation ? 1 : 0.45,
               transition: "all 0.2s ease",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              gap: 8,
             }}
           >
-            {savingRule ? "Saving Rule..." : "💾 Save Automation Configuration"}
+            <Save size={14} />
+            <span>{savingRule ? "Saving Rule..." : "Save Automation Configuration"}</span>
           </button>
         </form>
       </div>
@@ -560,7 +570,7 @@ export function AutomationPollerTab({
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
           <div>
             <h3 style={{ fontSize: 14, fontWeight: 700, color: "var(--text-hi)", display: "flex", alignItems: "center", gap: 8 }}>
-              <span>💻</span> Interactive Live Probe Runner
+              <Terminal size={15} style={{ color: "var(--cyan)" }} /> Interactive Live Probe Runner
             </h3>
             <p style={{ fontSize: 11, color: "var(--text-lo)", marginTop: 2 }}>
               Execute script immediately via SSH to test stdout and exit code matching
@@ -592,14 +602,15 @@ export function AutomationPollerTab({
               gap: 6,
             }}
           >
-            <span>⚡</span>
+            <Zap size={13} fill="#06090F" />
             <span>{runningProbe ? "Executing via SSH..." : "Run Probe Now"}</span>
           </button>
         </div>
 
         {probeError && (
-          <div style={{ padding: "10px 14px", background: "rgba(255, 77, 94, 0.12)", border: "1px solid rgba(255, 77, 94, 0.35)", borderRadius: 8, color: "var(--red)", fontSize: 12 }}>
-            ⚠ {probeError}
+          <div style={{ display: "flex", alignItems: "center", gap: 6, padding: "10px 14px", background: "rgba(255, 77, 94, 0.12)", border: "1px solid rgba(255, 77, 94, 0.35)", borderRadius: 8, color: "var(--red)", fontSize: 12 }}>
+            <AlertTriangle size={14} style={{ flexShrink: 0 }} />
+            <span>{probeError}</span>
           </div>
         )}
 
@@ -729,9 +740,22 @@ export function AutomationPollerTab({
                       color: probeResult.evaluation.matched ? "var(--green)" : "var(--amber)",
                       fontWeight: 700,
                       fontSize: 12,
+                      display: "flex",
+                      alignItems: "center",
+                      gap: 6,
                     }}
                   >
-                    {probeResult.evaluation.matched ? "✓ CRITERIA SATISFIED" : "✗ CRITERIA NOT SATISFIED"}
+                    {probeResult.evaluation.matched ? (
+                      <>
+                        <Check size={14} />
+                        <span>CRITERIA SATISFIED</span>
+                      </>
+                    ) : (
+                      <>
+                        <X size={14} />
+                        <span>CRITERIA NOT SATISFIED</span>
+                      </>
+                    )}
                   </span>
 
                   {probeResult.evaluation.matched && !isCompleted && (
@@ -747,9 +771,13 @@ export function AutomationPollerTab({
                         borderRadius: 6,
                         border: "none",
                         cursor: "pointer",
+                        display: "flex",
+                        alignItems: "center",
+                        gap: 5,
                       }}
                     >
-                      ✓ Mark Task Completed
+                      <Check size={12} strokeWidth={3} />
+                      <span>Mark Task Completed</span>
                     </button>
                   )}
                 </div>

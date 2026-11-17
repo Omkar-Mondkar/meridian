@@ -4,6 +4,7 @@ import { useTaskStore } from "../../stores/useTaskStore";
 import { BrandLogo } from "../ui/BrandLogo";
 import { SshSettingsModal } from "./SshSettingsModal";
 import { OperatorSwitcher } from "./OperatorSwitcher";
+import { Volume2, VolumeX, Server } from "lucide-react";
 
 interface HeaderProps {
   liveChipLabel: string | null;
@@ -29,7 +30,9 @@ export function Header({
       <div className="brand">
         <BrandLogo size={36} />
         <div>
-          <div className="brand-title">MERIDIAN · APS CONTROL CENTER</div>
+          <div className="brand-title">
+            MERIDIAN <span className="brand-title-extra">· APS CONTROL CENTER</span>
+          </div>
           <div className="brand-sub" id="phaseLabelSmall">
             {session.label}
           </div>
@@ -179,9 +182,10 @@ export function Header({
             className="btn"
             onClick={onEnableSound}
             title="Enable voice announcements"
-            style={{ fontSize: "11px", padding: "6px 10px" }}
+            style={{ fontSize: "11px", padding: "6px 10px", display: "inline-flex", alignItems: "center", gap: 5 }}
           >
-            🔕 Enable sound
+            <VolumeX size={13} />
+            <span>Enable sound</span>
           </button>
         )}
 
@@ -206,7 +210,7 @@ export function Header({
             fontWeight: 600,
           }}
         >
-          <span>⚡</span>
+          <Server size={13} />
           <span className="mono">SSH VAULT</span>
         </button>
 
@@ -217,7 +221,7 @@ export function Header({
           onClick={onMuteToggle}
           aria-label={muted ? "Unmute" : "Mute"}
         >
-          {muted ? "🔇" : "🔊"}
+          {muted ? <VolumeX size={15} /> : <Volume2 size={15} />}
         </button>
       </div>
 

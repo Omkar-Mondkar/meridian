@@ -16,6 +16,8 @@ export type WsClientAction =
   | { type: 'TASK_UPDATE'; taskId: string; status: 'pending' | 'in_progress' | 'completed' | 'blocked'; updatedBy?: string; reason?: string; operatorId?: string }
   | { type: 'TASK_OVERRIDE'; taskId: string; operator: string; reason: string; operatorId?: string }
   | { type: 'NODE_CREATE'; node: CustomNodeRecord; operatorId?: string }
+  | { type: 'NODE_UPDATE'; node: CustomNodeRecord; operatorId?: string }
+  | { type: 'NODE_DELETE'; nodeId: string; shiftKey?: string; operatorId?: string }
   | { type: 'EDGE_UPDATE'; shiftKey: string; sourceId: string; targetId: string; action: 'add' | 'remove'; operatorId?: string };
 
 export type WsServerEvent =
@@ -38,6 +40,8 @@ export type WsServerEvent =
   | { type: 'SSH_SETTINGS_UPDATED'; settings: any }
   | { type: 'AUTOMATION_RULE_UPDATED'; taskId: string; rule: any }
   | { type: 'NODE_CREATED'; node: CustomNodeRecord }
+  | { type: 'NODE_UPDATED'; node: CustomNodeRecord }
+  | { type: 'NODE_DELETED'; nodeId: string; shiftKey?: string }
   | { type: 'EDGE_UPDATED'; shiftKey: string; sourceId: string; targetId: string; action: 'add' | 'remove' }
   | { type: 'AUTH_ERROR'; message: string; requiredPermission: PermissionKey }
   | { type: 'PONG'; timestamp: string };
@@ -221,13 +225,55 @@ export class MeridianSocketHub {
           taskId: action.node.id,
           action: 'NODE_CREATE',
           operator: effectiveOperator,
-          reason: `Added custom node: ${action.node.title}`,
+          reason: `Added custom node: ${action.node.process || action.node.title || action.node.id}`,
           timestamp: new Date().toISOString(),
           details: { operatorId, role: user?.roleTitle }
         };
         await dbInstance.appendAuditLog(event);
 
         this.broadcast({ type: 'NODE_CREATED', node: action.node });
+        break;
+      }
+
+      case 'NODE_UPDATE': {
+        if (!checkPerm('dag:edit_topology')) return;
+
+        const effectiveOperator = user ? user.displayName : 'Operator';
+        await dbInstance.saveCustomNode(action.node);
+
+        const event: TaskAuditEvent = {
+          id: `node-upd-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+          taskId: action.node.id,
+          action: 'NODE_CREATE',
+          operator: effectiveOperator,
+          reason: `Updated custom node: ${action.node.process || action.node.title || action.node.id}`,
+          timestamp: new Date().toISOString(),
+          details: { operatorId, role: user?.roleTitle }
+        };
+        await dbInstance.appendAuditLog(event);
+
+        this.broadcast({ type: 'NODE_UPDATED', node: action.node });
+        break;
+      }
+
+      case 'NODE_DELETE': {
+        if (!checkPerm('dag:edit_topology')) return;
+
+        const effectiveOperator = user ? user.displayName : 'Operator';
+        await dbInstance.deleteCustomNode(action.nodeId);
+
+        const event: TaskAuditEvent = {
+          id: `node-del-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+          taskId: action.nodeId,
+          action: 'STATUS_CHANGE',
+          operator: effectiveOperator,
+          reason: `Deleted custom node: ${action.nodeId}`,
+          timestamp: new Date().toISOString(),
+          details: { operatorId, role: user?.roleTitle }
+        };
+        await dbInstance.appendAuditLog(event);
+
+        this.broadcast({ type: 'NODE_DELETED', nodeId: action.nodeId, shiftKey: action.shiftKey });
         break;
       }
 

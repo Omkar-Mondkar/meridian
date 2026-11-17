@@ -1,4 +1,5 @@
 import React, { useRef, useEffect } from "react";
+import { Folder, AlertTriangle, GitFork, List, RefreshCw, Pencil, Trash2 } from "lucide-react";
 import { useTaskStore } from "../../stores/useTaskStore";
 import { useTimeStore } from "../../stores/useTimeStore";
 import {
@@ -22,8 +23,16 @@ function ChecklistRow({
   row: ReturnType<typeof useTaskStore.getState>["checklists"][string][0];
   shiftKey: string;
 }) {
-  const { currentPersona, advanceStatus, getNodeDerivedStatus, setInspectorOpen, setSelectedTaskId } = useTaskStore();
-  const { canAdvanceTask } = usePermissions();
+  const {
+    currentPersona,
+    advanceStatus,
+    getNodeDerivedStatus,
+    setInspectorOpen,
+    setSelectedTaskId,
+    setEditingNode,
+    deleteCustomTaskNode,
+  } = useTaskStore();
+  const { canAdvanceTask, canEditDag } = usePermissions();
   const pillRef = useRef<HTMLButtonElement>(null);
   const derivedStatus = getNodeDerivedStatus(shiftKey, row.id);
   const isBlocked = derivedStatus === "blocked";
@@ -80,13 +89,30 @@ function ChecklistRow({
   return (
     <div className={`checklist-row panel${isBlocked ? " row-blocked" : ""}`}>
       <div className="cl-process">
-        <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 4 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 4, flexWrap: "wrap" }}>
           <span className={`prio ${row.priority}`}>
             {row.priority.toUpperCase()}
           </span>
           <span className="mono" style={{ fontSize: 11, color: "var(--text-lo)" }}>
             {row.id}
           </span>
+          {row.isCustom && (
+            <span
+              style={{
+                fontSize: 9,
+                fontWeight: 700,
+                letterSpacing: "0.06em",
+                padding: "1px 5px",
+                borderRadius: 3,
+                background: "rgba(168, 85, 247, 0.18)",
+                color: "#c084fc",
+                border: "1px solid rgba(168, 85, 247, 0.35)",
+                textTransform: "uppercase",
+              }}
+            >
+              CUSTOM
+            </span>
+          )}
           {row.dependsOn && row.dependsOn.length > 0 && (
             <span
               style={{
@@ -100,6 +126,52 @@ function ChecklistRow({
             >
               Prerequisites: {row.dependsOn.join(", ")}
             </span>
+          )}
+          {row.isCustom && canEditDag && (
+            <div style={{ display: "inline-flex", alignItems: "center", gap: 4, marginLeft: "auto" }}>
+              <button
+                type="button"
+                onClick={() => setEditingNode(row)}
+                title={`Edit custom node ${row.id}`}
+                style={{
+                  background: "rgba(255, 255, 255, 0.08)",
+                  border: "1px solid rgba(255, 255, 255, 0.18)",
+                  color: "var(--cyan)",
+                  borderRadius: 4,
+                  padding: "2px 5px",
+                  display: "inline-flex",
+                  alignItems: "center",
+                  cursor: "pointer",
+                }}
+              >
+                <Pencil size={11} />
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  if (
+                    window.confirm(
+                      `Delete custom task node "${row.id} - ${row.process}"? Any downstream dependencies will be safely unlinked.`
+                    )
+                  ) {
+                    deleteCustomTaskNode(shiftKey, row.id);
+                  }
+                }}
+                title={`Delete custom node ${row.id}`}
+                style={{
+                  background: "rgba(239, 68, 68, 0.14)",
+                  border: "1px solid rgba(239, 68, 68, 0.35)",
+                  color: "#fca5a5",
+                  borderRadius: 4,
+                  padding: "2px 5px",
+                  display: "inline-flex",
+                  alignItems: "center",
+                  cursor: "pointer",
+                }}
+              >
+                <Trash2 size={11} />
+              </button>
+            </div>
           )}
         </div>
 
@@ -126,7 +198,7 @@ function ChecklistRow({
               setInspectorOpen(true);
             }}
           >
-            <span>📁</span>
+            <Folder size={12} />
             <span>
               NetApp Manifest: {manifest.downloadedCount}/{manifest.totalExpected} files ready
             </span>
@@ -134,8 +206,9 @@ function ChecklistRow({
         )}
 
         {isBlocked && (
-          <div style={{ fontSize: 10, color: "var(--amber)", marginTop: 4 }}>
-            ⚠️ Waiting on upstream completion: {row.dependsOn?.join(", ")}
+          <div style={{ fontSize: 10, color: "var(--amber)", marginTop: 4, display: "flex", alignItems: "center", gap: 4 }}>
+            <AlertTriangle size={11} style={{ flexShrink: 0 }} />
+            <span>Waiting on upstream completion: {row.dependsOn?.join(", ")}</span>
           </div>
         )}
 
@@ -233,8 +306,10 @@ export function TasksTab() {
           id="shiftAutoBtn"
           title="Follow the live shift automatically"
           onClick={() => setAutoFollow(true)}
+          style={{ display: "inline-flex", alignItems: "center", gap: 5 }}
         >
-          ⟳ AUTO
+          <RefreshCw size={11} className={shiftAutoFollow ? "spin-icon" : ""} />
+          <span>AUTO</span>
         </button>
 
         {/* View Mode Toggle */}
@@ -244,7 +319,7 @@ export function TasksTab() {
             onClick={() => setViewMode("graph")}
             title="Interactive Dependency Flowchart"
           >
-            <span>☊</span>
+            <GitFork size={13} />
             <span>Flowchart DAG</span>
           </button>
 
@@ -253,7 +328,7 @@ export function TasksTab() {
             onClick={() => setViewMode("table")}
             title="Classical Checklist Table"
           >
-            <span>☰</span>
+            <List size={13} />
             <span>Checklist Table</span>
           </button>
         </div>

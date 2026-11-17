@@ -1,4 +1,17 @@
 import React, { useRef, useState, useMemo, useEffect } from "react";
+import {
+  Edit3,
+  Check,
+  Folder,
+  Plus,
+  Wrench,
+  AlertTriangle,
+  Move,
+  Layers,
+  Zap,
+  Target,
+  Shield,
+} from "lucide-react";
 import { useTaskStore } from "../../stores/useTaskStore";
 import { usePermissions } from "../../hooks/usePermissions";
 import { TaskNodeCard } from "./TaskNodeCard";
@@ -38,7 +51,9 @@ export function TaskDagCanvas() {
     sourceId: string;
     startPos: { x: number; y: number };
   } | null>(null);
-  const [mousePos, setMousePos] = useState<{ x: number; y: number } | null>(null);
+  const [mousePos, setMousePos] = useState<{ x: number; y: number } | null>(
+    null,
+  );
   const [connectError, setConnectError] = useState<string | null>(null);
 
   // Automatically reset edit mode if operator permissions are downgraded
@@ -53,7 +68,10 @@ export function TaskDagCanvas() {
   const rows = checklists[selectedShift] || [];
 
   // Helper to convert screen coordinates to canvas plane coordinates
-  const clientToCanvas = (clientX: number, clientY: number): { x: number; y: number } => {
+  const clientToCanvas = (
+    clientX: number,
+    clientY: number,
+  ): { x: number; y: number } => {
     if (!canvasInnerRef.current) return { x: 0, y: 0 };
     const rect = canvasInnerRef.current.getBoundingClientRect();
     return {
@@ -84,13 +102,17 @@ export function TaskDagCanvas() {
   }, [hoveredNodeId, rows]);
 
   // Start connecting from output port of source node
-  function handleStartConnect(sourceId: string, clientX: number, clientY: number) {
+  function handleStartConnect(
+    sourceId: string,
+    clientX: number,
+    clientY: number,
+  ) {
     const sourceNode = rows.find((r) => r.id === sourceId);
     if (!sourceNode) return;
     const pos = getNodeCoordinates(sourceNode, rows, selectedShift);
     const startPos = {
       x: pos.x + 125, // center of 250px card
-      y: pos.y + 84,  // bottom of card
+      y: pos.y + 84, // bottom of card
     };
     setConnectingFrom({ sourceId, startPos });
     setMousePos(clientToCanvas(clientX, clientY));
@@ -149,7 +171,9 @@ export function TaskDagCanvas() {
     if (connectingFrom) {
       // Check if dropped onto a node card
       if (e) {
-        const targetCard = (e.target as HTMLElement).closest<HTMLElement>("[data-node-id]");
+        const targetCard = (e.target as HTMLElement).closest<HTMLElement>(
+          "[data-node-id]",
+        );
         if (targetCard) {
           const targetId = targetCard.getAttribute("data-node-id");
           if (targetId && targetId !== connectingFrom.sourceId) {
@@ -183,7 +207,7 @@ export function TaskDagCanvas() {
   const total = rows.length;
   const completed = rows.filter((r) => r.status === "completed").length;
   const blocked = rows.filter(
-    (r) => getNodeDerivedStatus(selectedShift, r.id) === "blocked"
+    (r) => getNodeDerivedStatus(selectedShift, r.id) === "blocked",
   ).length;
 
   return (
@@ -269,7 +293,17 @@ export function TaskDagCanvas() {
               cursor: canEditDag ? "pointer" : "not-allowed",
             }}
           >
-            <span>{editMode ? "✓ Done Editing" : "✏️ Edit DAG"}</span>
+            {editMode ? (
+              <>
+                <Check size={13} strokeWidth={2.5} />
+                <span>Done Editing</span>
+              </>
+            ) : (
+              <>
+                <Edit3 size={13} />
+                <span>Edit DAG</span>
+              </>
+            )}
           </button>
 
           <button
@@ -277,7 +311,7 @@ export function TaskDagCanvas() {
             onClick={() => setInspectorOpen(true)}
             title="Inspect ~200 NetApp Exchange Files"
           >
-            <span>📁</span>
+            <Folder size={13} />
             <span>NetApp Exchange Files</span>
           </button>
 
@@ -298,7 +332,7 @@ export function TaskDagCanvas() {
               cursor: canEditDag ? "pointer" : "not-allowed",
             }}
           >
-            <span>+</span>
+            <Plus size={14} />
             <span>Add Custom Node</span>
           </button>
         </div>
@@ -307,20 +341,28 @@ export function TaskDagCanvas() {
       {/* Edit Mode Helper & Error Notification Banner */}
       {editMode && (
         <div className="dag-edit-mode-banner">
-          <span className="banner-icon">🔧</span>
+          <span className="banner-icon">
+            <Wrench size={14} />
+          </span>
           <span className="banner-text">
-            <strong>DAG Builder Active:</strong> Drag from bottom port (○) of any node and drop onto top port (○) of another to link dependency. Click (✕) on any edge to disconnect.
+            <strong>DAG Builder Active:</strong> Drag from bottom port of any
+            node and drop onto top port of another to link dependency. Click (x)
+            on any edge to disconnect.
           </span>
           {connectError && (
             <span className="banner-error">
-              ⚠️ {connectError}
+              <AlertTriangle size={13} style={{ marginRight: 4 }} />
+              {connectError}
             </span>
           )}
         </div>
       )}
       {!editMode && connectError && (
         <div className="dag-edit-mode-banner error-only">
-          <span className="banner-error">⚠️ {connectError}</span>
+          <span className="banner-error">
+            <AlertTriangle size={13} style={{ marginRight: 4 }} />
+            {connectError}
+          </span>
         </div>
       )}
 
@@ -339,7 +381,10 @@ export function TaskDagCanvas() {
       >
         {/* Floating Pan Hint */}
         <div className="canvas-pan-hint">
-          <span>🖐️ Click & drag anywhere to move canvas · Ctrl + Scroll to zoom</span>
+          <Move size={12} style={{ marginRight: 6 }} />
+          <span>
+            Click & drag anywhere to move canvas · Ctrl + Scroll to zoom
+          </span>
         </div>
 
         {/* Transformed Canvas Plane */}
@@ -353,16 +398,32 @@ export function TaskDagCanvas() {
         >
           {/* Pipeline Track Headers at the top */}
           <div className="track-headers-layer">
-            {TRACK_HEADERS.map((header) => (
-              <div
-                key={header.title}
-                className="pipeline-track-header"
-                style={{ left: header.x }}
-              >
-                <span className="track-header-icon">{header.icon}</span>
-                <span className="track-header-title">{header.title}</span>
-              </div>
-            ))}
+            {TRACK_HEADERS.map((header) => {
+              const renderTrackIcon = () => {
+                switch (header.trackId) {
+                  case "exchange":
+                    return <Layers size={14} />;
+                  case "market_data":
+                    return <Zap size={14} />;
+                  case "execution":
+                    return <Target size={14} />;
+                  case "infra":
+                    return <Shield size={14} />;
+                  default:
+                    return <Folder size={14} />;
+                }
+              };
+              return (
+                <div
+                  key={header.title}
+                  className="pipeline-track-header"
+                  style={{ left: header.x }}
+                >
+                  <span className="track-header-icon">{renderTrackIcon()}</span>
+                  <span className="track-header-title">{header.title}</span>
+                </div>
+              );
+            })}
           </div>
 
           {/* SVG Connector Edges */}

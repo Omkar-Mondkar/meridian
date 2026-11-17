@@ -28,14 +28,14 @@ export const SESSIONS: Session[] = [
 ];
 
 export const SESSION_ICON: Record<string, string> = {
-  PRE_OPEN_COLLECT: '🌅',
-  PRE_OPEN_MATCH:   '🌅',
-  PRE_OPEN_BUFFER:  '🌅',
-  NORMAL:           '📈',
-  CAS_WINDOW:       '🔔',
-  CAS_SETTLEMENT:   '🔔',
-  POST_CLOSE:       '🌇',
-  MODIFICATION:     '🗂️',
+  PRE_OPEN_COLLECT: 'pre-open',
+  PRE_OPEN_MATCH:   'pre-open',
+  PRE_OPEN_BUFFER:  'pre-open',
+  NORMAL:           'trading',
+  CAS_WINDOW:       'closing-auction',
+  CAS_SETTLEMENT:   'closing-auction',
+  POST_CLOSE:       'post-close',
+  MODIFICATION:     'modification',
 };
 
 export const SESSION_START = toMin(SESSIONS[0].start);

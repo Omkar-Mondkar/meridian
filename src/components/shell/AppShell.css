@@ -4,15 +4,27 @@
 .app-shell {
   position: relative;
   height: 100vh;
+  height: 100dvh;
   width: 100%;
   display: flex;
   flex-direction: column;
   overflow: hidden;
 }
 
-/* ---- Tab visibility ---- */
+/* ---- Tab Panel & Visibility ---- */
+.tab-panel {
+  display: block;
+  min-height: 0;
+}
+.tab-panel.tab-panel-fill {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+}
+.tab-panel.view-hidden,
 .view-hidden {
-  display: none;
+  display: none !important;
 }
 
 /* ---- Header ---- */
@@ -23,8 +35,8 @@
   align-items: center;
   justify-content: space-between;
   gap: 16px;
-  padding: 0 22px;
-  height: 76px;
+  padding: 10px 22px;
+  min-height: 68px;
   flex-shrink: 0;
   flex-wrap: wrap;
   background: rgba(8, 11, 20, 0.60);
@@ -91,10 +103,17 @@
   display: flex;
   gap: 6px;
   padding: 0px 22px;
-  height: 44px;
+  min-height: 46px;
   align-items: center;
   flex-shrink: 0;
   overflow-x: auto;
+  overflow-y: hidden;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+.tabbar::-webkit-scrollbar {
+  display: none;
 }
 .tab {
   background: transparent;
@@ -104,8 +123,15 @@
   font-weight: 600;
   letter-spacing: 0.03em;
   padding: 8px 14px;
+  min-height: 38px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   border-radius: 8px;
   white-space: nowrap;
+  cursor: pointer;
+  touch-action: manipulation;
+  transition: all 0.18s ease;
 }
 .tab.active {
   color: var(--void);
@@ -121,8 +147,12 @@
   position: relative;
   z-index: 2;
   flex: 1;
-  overflow: auto;
+  min-height: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
   padding: 14px 22px 22px;
+  display: flex;
+  flex-direction: column;
 }
 
 /* Keep sections in the DOM but hidden so rAF loops don't die */
@@ -1585,22 +1615,74 @@ svg.analog.mini {
   gap: 8px;
 }
 
-/* ---- Responsive ---- */
-@media (max-width: 880px) {
+/* ---- Responsive Viewports ---- */
+
+/* Tablets & Small Laptops (<= 1200px) */
+@media (max-width: 1200px) {
+  .overview-grid {
+    grid-template-columns: 1fr 300px;
+    gap: 14px;
+  }
+  .roster-grid {
+    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  }
+}
+
+/* Medium Tablets & Narrow Desktops (<= 1024px) */
+@media (max-width: 1024px) {
   .overview-grid {
     grid-template-columns: 1fr;
+  }
+  .side-col {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 14px;
+  }
+  .side-col > *:first-child {
+    grid-column: 1 / -1;
+  }
+  .header {
+    padding: 10px 16px;
+  }
+}
+
+/* Tablets & Large Phones (<= 880px) */
+@media (max-width: 880px) {
+  .header {
+    height: auto;
+    padding: 10px 14px;
+    gap: 10px;
+  }
+  .brand {
+    order: 1;
+  }
+  .clock-block {
+    order: 2;
+  }
+  .header-status {
+    order: 3;
+    width: 100%;
+    overflow-x: auto;
+    overflow-y: hidden;
+    -webkit-overflow-scrolling: touch;
+    padding-bottom: 4px;
+    gap: 8px;
+    scrollbar-width: none;
+  }
+  .header-status::-webkit-scrollbar {
+    display: none;
+  }
+  .tabbar {
+    padding: 0 14px;
+  }
+  .content {
+    padding: 10px 14px 18px;
   }
   .roster-grid {
     grid-template-columns: 1fr;
   }
-  .header {
-    height: auto;
-    padding: 12px 16px;
-  }
-  .clock-block {
-    order: 3;
-    width: 100%;
-    align-items: flex-start;
+  .side-col {
+    grid-template-columns: 1fr;
   }
   .checklist-head {
     display: none;
@@ -1608,12 +1690,69 @@ svg.analog.mini {
   .checklist-row {
     grid-template-columns: 1fr;
     gap: 6px;
-    padding: 14px 16px;
+    padding: 12px 14px;
   }
   .cl-time,
   .cl-mode,
   .cl-exec {
     font-size: 11.5px;
+  }
+}
+
+/* Mobile Devices (<= 640px) */
+@media (max-width: 640px) {
+  .header {
+    padding: 8px 12px;
+  }
+  .brand-title-extra {
+    display: none;
+  }
+  .brand-title {
+    font-size: 12px;
+  }
+  .brand-sub {
+    font-size: 10px;
+  }
+  .clock-time {
+    font-size: 20px;
+  }
+  .clock-date {
+    font-size: 10px;
+  }
+  .operator-switcher-text span:last-child {
+    display: none;
+  }
+  .ticker-grid {
+    grid-template-columns: 1fr;
+  }
+  .tab {
+    padding: 6px 12px;
+    font-size: 12px;
+    min-height: 42px;
+  }
+  .tasks-toolbar {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 8px;
+  }
+  .tasks-toolbar-hint {
+    min-width: 0;
+    width: 100%;
+  }
+  .shift-tabbar {
+    overflow-x: auto;
+    width: 100%;
+    padding-bottom: 4px;
+  }
+  .leader-card {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+  .sky-preview {
+    bottom: 8px;
+    right: 8px;
+    transform: scale(0.9);
+    transform-origin: bottom right;
   }
 }
 

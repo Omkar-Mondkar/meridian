@@ -185,6 +185,7 @@ export interface ChecklistItem {
   verification?: VerificationConfig;
   fileManifest?: FileManifestSummary;
   isCustom?: boolean;
+  shift?: string;
 }
 
 /** Seed checklist data. In production this comes from the backend. */

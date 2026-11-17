@@ -1,6 +1,7 @@
 import React, { useState, useRef } from 'react';
 import { useSkyStore } from '../../stores/useSkyStore';
 import { Panel } from '../ui/Panel';
+import { Sun, ChevronRight, ChevronDown, Play, Pause } from 'lucide-react';
 
 /** Demo-only sky scrubber in the bottom-right corner. */
 export function SkyPreview() {
@@ -43,8 +44,13 @@ export function SkyPreview() {
         onClick={() => setCollapsed((c) => !c)}
         style={{ cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}
       >
-        <span id="skyPreviewLabel">🌤 Sky preview</span>
-        <span id="skyPreviewCaret">{collapsed ? '▸' : '▾'}</span>
+        <span id="skyPreviewLabel" style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+          <Sun size={13} style={{ color: 'var(--amber)' }} />
+          <span>Sky preview</span>
+        </span>
+        <span id="skyPreviewCaret" style={{ display: 'inline-flex', alignItems: 'center', color: 'var(--text-lo)' }}>
+          {collapsed ? <ChevronRight size={13} /> : <ChevronDown size={13} />}
+        </span>
       </div>
       {!collapsed && (
         <div className="sky-preview-body">
@@ -67,9 +73,19 @@ export function SkyPreview() {
               id="previewPlayBtn"
               onClick={handleSweep}
               disabled={sweeping}
-              style={{ flex: 1, padding: '7px 10px', fontSize: 11 }}
+              style={{ flex: 1, padding: '7px 10px', fontSize: 11, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 5 }}
             >
-              {sweeping ? '⏸ Sweeping…' : '▶ Sweep 24h'}
+              {sweeping ? (
+                <>
+                  <Pause size={12} fill="currentColor" />
+                  <span>Sweeping…</span>
+                </>
+              ) : (
+                <>
+                  <Play size={12} fill="currentColor" />
+                  <span>Sweep 24h</span>
+                </>
+              )}
             </button>
             <button
               className="btn"

@@ -1,6 +1,8 @@
 import React from "react";
+import { Check, Clock, AlertTriangle, Folder, Pencil, Trash2 } from "lucide-react";
 import type { ChecklistItem, NodeStatus } from "../../data/roster";
 import { usePermissions } from "../../hooks/usePermissions";
+import { useTaskStore } from "../../stores/useTaskStore";
 
 interface TaskNodeCardProps {
   node: ChecklistItem;
@@ -23,6 +25,7 @@ interface TaskNodeCardProps {
 
 export function TaskNodeCard({
   node,
+  shiftKey,
   derivedStatus,
   isSelected,
   isHovered,
@@ -39,6 +42,7 @@ export function TaskNodeCard({
   style,
 }: TaskNodeCardProps) {
   const { canEditDag, canOverrideOk } = usePermissions();
+  const { setEditingNode, deleteCustomTaskNode } = useTaskStore();
   const isBlocked = derivedStatus === "blocked";
   const isCompleted = node.status === "completed";
   const isDropTarget = isConnecting && !isConnectingSource;
@@ -116,6 +120,24 @@ export function TaskNodeCard({
       <div className="node-header">
         <div className="node-badge-group">
           <span className="node-id mono">{node.id}</span>
+          {node.isCustom && (
+            <span
+              style={{
+                fontSize: 8.5,
+                fontWeight: 700,
+                letterSpacing: "0.06em",
+                padding: "1px 5px",
+                borderRadius: 3,
+                background: "rgba(168, 85, 247, 0.18)",
+                color: "#c084fc",
+                border: "1px solid rgba(168, 85, 247, 0.35)",
+                textTransform: "uppercase",
+              }}
+              title="Custom User-Created DAG Node"
+            >
+              CUSTOM
+            </span>
+          )}
           <span className={`node-priority ${node.priority}`}>{node.priority}</span>
           <span
             className="node-status-indicator"
@@ -144,10 +166,72 @@ export function TaskNodeCard({
               }`,
             }}
           >
-            {isCompleted ? "✓ Completed" : isBlocked ? "⏳ Blocked" : "Ready"}
+            {isCompleted ? (
+              <span style={{ display: "inline-flex", alignItems: "center", gap: 3 }}>
+                <Check size={11} strokeWidth={2.5} /> Completed
+              </span>
+            ) : isBlocked ? (
+              <span style={{ display: "inline-flex", alignItems: "center", gap: 3 }}>
+                <Clock size={11} /> Blocked
+              </span>
+            ) : (
+              "Ready"
+            )}
           </span>
         </div>
-        <div className="node-time mono">{node.time}</div>
+        <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+          {node.isCustom && canEditDag && (
+            <div style={{ display: "inline-flex", alignItems: "center", gap: 3 }}>
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setEditingNode(node);
+                }}
+                title={`Edit custom node ${node.id}`}
+                style={{
+                  background: "rgba(255, 255, 255, 0.08)",
+                  border: "1px solid rgba(255, 255, 255, 0.18)",
+                  color: "var(--cyan)",
+                  borderRadius: 4,
+                  padding: "2px 5px",
+                  display: "inline-flex",
+                  alignItems: "center",
+                  cursor: "pointer",
+                }}
+              >
+                <Pencil size={10} />
+              </button>
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  if (
+                    window.confirm(
+                      `Delete custom task node "${node.id} - ${node.process}"? Any downstream dependencies will be safely unlinked.`
+                    )
+                  ) {
+                    deleteCustomTaskNode(shiftKey, node.id);
+                  }
+                }}
+                title={`Delete custom node ${node.id}`}
+                style={{
+                  background: "rgba(239, 68, 68, 0.14)",
+                  border: "1px solid rgba(239, 68, 68, 0.35)",
+                  color: "#fca5a5",
+                  borderRadius: 4,
+                  padding: "2px 5px",
+                  display: "inline-flex",
+                  alignItems: "center",
+                  cursor: "pointer",
+                }}
+              >
+                <Trash2 size={10} />
+              </button>
+            </div>
+          )}
+          <div className="node-time mono">{node.time}</div>
+        </div>
       </div>
 
       <div className="node-title">{node.process}</div>
@@ -164,8 +248,8 @@ export function TaskNodeCard({
           title="Click to inspect all NetApp exchange files"
         >
           <div className="manifest-stats">
-            <span style={{ color: "var(--cyan)", fontWeight: 600 }}>
-              📁 NetApp Files: {manifest.downloadedCount}/{manifest.totalExpected}
+            <span style={{ color: "var(--cyan)", fontWeight: 600, display: "inline-flex", alignItems: "center", gap: 5 }}>
+              <Folder size={12} /> NetApp Files: {manifest.downloadedCount}/{manifest.totalExpected}
             </span>
             <span className="mono" style={{ color: "var(--text-lo)" }}>
               {manifestPct}%
@@ -183,7 +267,7 @@ export function TaskNodeCard({
       {/* Upstream Blocked Warning Indicator */}
       {isBlocked && (
         <div className="node-blocked-chip">
-          <span>⚠️</span>
+          <AlertTriangle size={12} style={{ flexShrink: 0 }} />
           <span>
             Waiting: <strong>{(node.dependsOn || []).join(", ")}</strong>
           </span>
@@ -202,7 +286,7 @@ export function TaskNodeCard({
             gap: 4,
           }}
         >
-          <span>✓</span>
+          <Check size={12} strokeWidth={2.5} />
           <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
             {node.completedBy || "Completed"} {node.completedAt ? `at ${node.completedAt}` : ""}
           </span>

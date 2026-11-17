@@ -3,12 +3,13 @@
    Infinite Draggable Canvas (Excalidraw-like) & Hierarchical Layout
    ========================================================= */
 
-/* Parent section wrapper height override */
+/* Parent section wrapper fluid flex sizing */
 #view-tasks {
   display: flex !important;
   flex-direction: column !important;
-  min-height: calc(100vh - 130px) !important;
-  height: calc(100vh - 130px) !important;
+  flex: 1;
+  min-height: 0;
+  height: 100%;
 }
 
 .tasks-dag-container {
@@ -16,8 +17,7 @@
   flex-direction: column;
   width: 100%;
   flex: 1;
-  min-height: 460px;
-  height: calc(100vh - 230px);
+  min-height: 420px;
   position: relative;
   overflow: hidden;
   background: #040711;
@@ -357,6 +357,9 @@
   font-weight: 600;
   color: var(--text-hi);
   line-height: 1.35;
+  margin: 6px 0;
+  word-break: break-word;
+  overflow-wrap: break-word;
 }
 
 /* Manifest Banner in M1 */
@@ -571,4 +574,42 @@
 
 .dag-edge-disconnect-btn:hover text {
   fill: #FFFFFF !important;
+}
+
+/* ---- Responsive DAG Canvas Controls ---- */
+@media (max-width: 960px) {
+  .dag-metrics-bar {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 10px;
+    padding: 10px 14px;
+  }
+  .dag-legend {
+    flex-wrap: wrap;
+    gap: 10px;
+  }
+  .dag-controls {
+    flex-wrap: wrap;
+    justify-content: space-between;
+    gap: 8px;
+  }
+  .canvas-pan-hint {
+    font-size: 10px;
+    padding: 4px 8px;
+  }
+}
+
+@media (max-width: 640px) {
+  .dag-controls {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 6px;
+  }
+  .canvas-pan-controls {
+    justify-content: center;
+  }
+  .dag-btn {
+    justify-content: center;
+    width: 100%;
+  }
 }

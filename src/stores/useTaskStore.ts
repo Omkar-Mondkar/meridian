@@ -44,6 +44,62 @@ export interface PollerClientStatus {
 
 export type ViewMode = "graph" | "table";
 
+const LOCAL_STORAGE_CUSTOM_NODES_KEY = "meridian_custom_nodes_v1";
+
+function loadCustomNodesFromStorage(): Record<string, ChecklistItem[]> {
+  try {
+    if (typeof window === "undefined" || !window.localStorage) return {};
+    const raw = window.localStorage.getItem(LOCAL_STORAGE_CUSTOM_NODES_KEY);
+    if (!raw) return {};
+    return JSON.parse(raw);
+  } catch (e) {
+    console.warn("[TaskStore] Failed to load custom nodes from localStorage:", e);
+    return {};
+  }
+}
+
+function saveCustomNodesToStorage(checklists: Record<string, ChecklistItem[]>) {
+  try {
+    if (typeof window === "undefined" || !window.localStorage) return;
+    const customOnly: Record<string, ChecklistItem[]> = {};
+    for (const [shift, items] of Object.entries(checklists)) {
+      const customs = items.filter((item) => item.isCustom);
+      if (customs.length > 0) {
+        customOnly[shift] = customs;
+      }
+    }
+    window.localStorage.setItem(LOCAL_STORAGE_CUSTOM_NODES_KEY, JSON.stringify(customOnly));
+  } catch (e) {
+    console.warn("[TaskStore] Failed to save custom nodes to localStorage:", e);
+  }
+}
+
+function getInitialChecklistsWithPersistence(): Record<string, ChecklistItem[]> {
+  const initial = makeInitialChecklists();
+  const stored = loadCustomNodesFromStorage();
+  for (const [shift, items] of Object.entries(stored)) {
+    if (!initial[shift]) initial[shift] = [];
+    for (const customItem of items) {
+      if (!initial[shift].some((x) => x.id === customItem.id)) {
+        initial[shift].push(customItem);
+      }
+    }
+  }
+  return initial;
+}
+
+export function resolveNodeShift(node: { id?: string; shift?: string; pipeline?: string }): string {
+  if (node.shift && (node.shift === "Morning" || node.shift === "Evening" || node.shift === "Night")) {
+    return node.shift;
+  }
+  if (node.id) {
+    if (node.id.startsWith("M")) return "Morning";
+    if (node.id.startsWith("E")) return "Evening";
+    if (node.id.startsWith("N")) return "Night";
+  }
+  return "Morning";
+}
+
 interface TaskState {
   checklists: Record<string, ChecklistItem[]>;
   selectedShift: ShiftKey;
@@ -62,6 +118,7 @@ interface TaskState {
   selectedTaskId: string | null;
   inspectorOpen: boolean;
   nodeBuilderOpen: boolean;
+  editingNode: ChecklistItem | null;
 
   // Actions
   setPollerStatus: (status: PollerClientStatus) => void;
@@ -74,6 +131,7 @@ interface TaskState {
   setSelectedTaskId: (id: string | null) => void;
   setInspectorOpen: (open: boolean) => void;
   setNodeBuilderOpen: (open: boolean) => void;
+  setEditingNode: (node: ChecklistItem | null) => void;
 
   advanceStatus: (
     shiftKey: string,
@@ -91,6 +149,8 @@ interface TaskState {
   ) => void;
 
   addCustomTaskNode: (shiftKey: string, item: ChecklistItem) => void;
+  updateCustomTaskNode: (shiftKey: string, item: ChecklistItem) => void;
+  deleteCustomTaskNode: (shiftKey: string, nodeId: string) => void;
 
   updateExchangeFileStatus: (
     fileId: string,
@@ -113,7 +173,7 @@ interface TaskState {
 }
 
 export const useTaskStore = create<TaskState>((set, get) => ({
-  checklists: makeInitialChecklists(),
+  checklists: getInitialChecklistsWithPersistence(),
   selectedShift: "Morning",
   shiftAutoFollow: true,
   currentPersona: DEFAULT_TASK_PERSONA,
@@ -128,6 +188,7 @@ export const useTaskStore = create<TaskState>((set, get) => ({
   selectedTaskId: null,
   inspectorOpen: false,
   nodeBuilderOpen: false,
+  editingNode: null,
 
   setPollerStatus: (pollerStatus) => set({ pollerStatus }),
   setSelectedShift: (shift, manual) => {
@@ -169,7 +230,10 @@ export const useTaskStore = create<TaskState>((set, get) => ({
   setEditMode: (editMode) => set({ editMode }),
   setSelectedTaskId: (selectedTaskId) => set({ selectedTaskId }),
   setInspectorOpen: (inspectorOpen) => set({ inspectorOpen }),
-  setNodeBuilderOpen: (nodeBuilderOpen) => set({ nodeBuilderOpen }),
+  setNodeBuilderOpen: (nodeBuilderOpen) =>
+    set({ nodeBuilderOpen, ...(nodeBuilderOpen ? {} : { editingNode: null }) }),
+  setEditingNode: (editingNode) =>
+    set({ editingNode, nodeBuilderOpen: editingNode !== null }),
 
   getNodeDerivedStatus: (shiftKey, taskId) => {
     const rows = get().checklists[shiftKey] || [];
@@ -303,11 +367,13 @@ export const useTaskStore = create<TaskState>((set, get) => ({
 
     const newItem: ChecklistItem = {
       ...item,
+      shift: shiftKey,
       isCustom: true,
-      status: "open",
+      status: item.status || "open",
     };
 
     checklists[shiftKey].push(newItem);
+    saveCustomNodesToStorage(checklists);
 
     const event: AuditEvent = {
       taskId: newItem.id,
@@ -324,10 +390,89 @@ export const useTaskStore = create<TaskState>((set, get) => ({
       checklists,
       auditLog: [event, ...s.auditLog],
       nodeBuilderOpen: false,
+      editingNode: null,
     }));
 
     // Broadcast node creation to server & other active screens
     syncClient.sendNodeCreate(newItem);
+  },
+
+  updateCustomTaskNode: (shiftKey, item) => {
+    const checklists = structuredClone(get().checklists);
+    const targetShift = item.shift || shiftKey;
+    const rows = checklists[targetShift] || [];
+    const index = rows.findIndex((r) => r.id === item.id);
+    if (index === -1) return;
+
+    rows[index] = {
+      ...rows[index],
+      ...item,
+      shift: targetShift,
+      isCustom: true,
+    };
+    checklists[targetShift] = rows;
+    saveCustomNodesToStorage(checklists);
+
+    const event: AuditEvent = {
+      taskId: item.id,
+      shift: targetShift,
+      process: item.process,
+      completedBy: get().currentPersona.name,
+      role: get().currentPersona.role,
+      completedAt: new Date().toISOString(),
+      action: "advance_status",
+      reason: `Custom node updated in ${targetShift} shift DAG`,
+    };
+
+    set((s) => ({
+      checklists,
+      auditLog: [event, ...s.auditLog],
+      nodeBuilderOpen: false,
+      editingNode: null,
+    }));
+
+    syncClient.sendNodeUpdate(rows[index]);
+  },
+
+  deleteCustomTaskNode: (shiftKey, nodeId) => {
+    const checklists = structuredClone(get().checklists);
+    const rows = checklists[shiftKey] || [];
+    const target = rows.find((r) => r.id === nodeId);
+    if (!target) return;
+
+    // Filter out target node
+    checklists[shiftKey] = rows.filter((r) => r.id !== nodeId);
+
+    // Clean up any other nodes that have dependsOn referencing nodeId
+    for (const r of checklists[shiftKey]) {
+      if (r.dependsOn && r.dependsOn.includes(nodeId)) {
+        r.dependsOn = r.dependsOn.filter((id) => id !== nodeId);
+      }
+    }
+
+    saveCustomNodesToStorage(checklists);
+
+    const event: AuditEvent = {
+      taskId: nodeId,
+      shift: shiftKey,
+      process: target.process,
+      completedBy: get().currentPersona.name,
+      role: get().currentPersona.role,
+      completedAt: new Date().toISOString(),
+      action: "advance_status",
+      reason: `Custom node deleted from ${shiftKey} shift DAG`,
+    };
+
+    set((s) => ({
+      checklists,
+      auditLog: [event, ...s.auditLog],
+      nodeBuilderOpen: false,
+      editingNode: null,
+      selectedTaskId: s.selectedTaskId === nodeId ? null : s.selectedTaskId,
+      inspectorOpen: s.selectedTaskId === nodeId ? false : s.inspectorOpen,
+    }));
+
+    syncClient.sendNodeDelete(shiftKey, nodeId);
   },
 
   updateExchangeFileStatus: (fileId, status) => {
@@ -409,7 +554,7 @@ export const useTaskStore = create<TaskState>((set, get) => ({
       role: get().currentPersona.role,
       completedAt: new Date().toISOString(),
       action: "advance_status",
-      reason: `DAG dependency added: ${sourceId} ➔ ${targetId}`,
+      reason: `DAG dependency added: ${sourceId} -> ${targetId}`,
     };
 
     set((s) => ({
@@ -437,7 +582,7 @@ export const useTaskStore = create<TaskState>((set, get) => ({
       role: get().currentPersona.role,
       completedAt: new Date().toISOString(),
       action: "advance_status",
-      reason: `DAG dependency removed: ${sourceId} ✕ ${targetId}`,
+      reason: `DAG dependency removed: ${sourceId} -x- ${targetId}`,
     };
 
     set((s) => ({
@@ -492,12 +637,21 @@ syncClient.subscribe((event) => {
     // Merge custom nodes
     if (payload.customNodes && Array.isArray(payload.customNodes)) {
       for (const node of payload.customNodes) {
-        const shift = node.pipeline || "Morning";
+        const shift = resolveNodeShift(node);
         if (!checklists[shift]) checklists[shift] = [];
-        if (!checklists[shift].some((x) => x.id === node.id)) {
-          checklists[shift].push({ ...node, isCustom: true });
+        const existingIdx = checklists[shift].findIndex((x) => x.id === node.id);
+        if (existingIdx >= 0) {
+          checklists[shift][existingIdx] = {
+            ...checklists[shift][existingIdx],
+            ...node,
+            shift,
+            isCustom: true,
+          };
+        } else {
+          checklists[shift].push({ ...node, shift, isCustom: true });
         }
       }
+      saveCustomNodesToStorage(checklists);
     }
 
     // Merge edge overrides
@@ -597,11 +751,49 @@ syncClient.subscribe((event) => {
     if (!node) return;
 
     const checklists = structuredClone(useTaskStore.getState().checklists);
-    const shift = node.pipeline || "Morning";
+    const shift = resolveNodeShift(node);
     if (!checklists[shift]) checklists[shift] = [];
     if (!checklists[shift].some((x) => x.id === node.id)) {
-      checklists[shift].push({ ...node, isCustom: true });
+      checklists[shift].push({ ...node, shift, isCustom: true });
+      saveCustomNodesToStorage(checklists);
       useTaskStore.setState({ checklists });
+    }
+  } else if (event.type === "NODE_UPDATED") {
+    const node = event.data?.node;
+    if (!node) return;
+
+    const checklists = structuredClone(useTaskStore.getState().checklists);
+    const shift = resolveNodeShift(node);
+    if (!checklists[shift]) checklists[shift] = [];
+    const idx = checklists[shift].findIndex((x) => x.id === node.id);
+    if (idx >= 0) {
+      checklists[shift][idx] = {
+        ...checklists[shift][idx],
+        ...node,
+        shift,
+        isCustom: true,
+      };
+      saveCustomNodesToStorage(checklists);
+      useTaskStore.setState({ checklists });
+    }
+  } else if (event.type === "NODE_DELETED") {
+    const { shiftKey, nodeId } = event.data || {};
+    if (!shiftKey || !nodeId) return;
+
+    const checklists = structuredClone(useTaskStore.getState().checklists);
+    if (checklists[shiftKey]) {
+      checklists[shiftKey] = checklists[shiftKey].filter((x) => x.id !== nodeId);
+      for (const r of checklists[shiftKey]) {
+        if (r.dependsOn && r.dependsOn.includes(nodeId)) {
+          r.dependsOn = r.dependsOn.filter((id) => id !== nodeId);
+        }
+      }
+      saveCustomNodesToStorage(checklists);
+      useTaskStore.setState((s) => ({
+        checklists,
+        selectedTaskId: s.selectedTaskId === nodeId ? null : s.selectedTaskId,
+        inspectorOpen: s.selectedTaskId === nodeId ? false : s.inspectorOpen,
+      }));
     }
   } else if (event.type === "TASK_COMPLETED_BY_POLLER") {
     const { taskId, record, matchDetail } = event.data || {};

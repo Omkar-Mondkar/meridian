@@ -22,6 +22,17 @@
   --orange: #FF9F45;
   --radius: 14px;
   --night-amount: 0;
+
+  /* Stacking Context / z-index hierarchy */
+  --z-base: 1;
+  --z-tabbar: 40;
+  --z-header: 50;
+  --z-dropdown: 200;
+  --z-modal-backdrop: 1000;
+  --z-modal: 1010;
+  --z-modal-confirm-backdrop: 1100;
+  --z-modal-confirm: 1110;
+  --z-toast: 1200;
 }
 
 /* ---------- Reset ---------- */

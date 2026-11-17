@@ -125,8 +125,8 @@ const server = http.createServer(async (req, res) => {
       return;
     }
 
-    // Custom node creation endpoint (Guarded by dag:edit_topology)
-    if (pathname === '/api/tasks/node' && req.method === 'POST') {
+    // Custom node creation / update endpoint (Guarded by dag:edit_topology)
+    if (pathname === '/api/tasks/node' && (req.method === 'POST' || req.method === 'PUT')) {
       const auth = await authorizeRequest(req, res, 'dag:edit_topology');
       if (!auth.allowed) return;
 
@@ -138,10 +138,39 @@ const server = http.createServer(async (req, res) => {
       }
 
       await dbInstance.saveCustomNode(body.node);
-      socketHub.broadcast({ type: 'NODE_CREATED', node: body.node });
+      const eventType = req.method === 'PUT' ? 'NODE_UPDATED' : 'NODE_CREATED';
+      socketHub.broadcast({ type: eventType as any, node: body.node });
 
       res.writeHead(200, { 'Content-Type': 'application/json' });
       res.end(JSON.stringify({ success: true, node: body.node }));
+      return;
+    }
+
+    // Custom node deletion endpoint (Guarded by dag:edit_topology)
+    if ((pathname === '/api/tasks/node' || pathname.startsWith('/api/tasks/node/')) && req.method === 'DELETE') {
+      const auth = await authorizeRequest(req, res, 'dag:edit_topology');
+      if (!auth.allowed) return;
+
+      let nodeId = url.searchParams.get('id') || pathname.replace('/api/tasks/node/', '');
+      let shiftKey = url.searchParams.get('shift') || undefined;
+
+      if (!nodeId || nodeId === '/api/tasks/node') {
+        const body = await parseJsonBody<{ id?: string; nodeId?: string; shiftKey?: string }>(req).catch(() => ({ id: undefined, nodeId: undefined, shiftKey: undefined }));
+        nodeId = body.id || body.nodeId || '';
+        if (body.shiftKey) shiftKey = body.shiftKey;
+      }
+
+      if (!nodeId) {
+        res.writeHead(400, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ error: 'nodeId is required' }));
+        return;
+      }
+
+      const deleted = await dbInstance.deleteCustomNode(nodeId);
+      socketHub.broadcast({ type: 'NODE_DELETED', nodeId, shiftKey });
+
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ success: true, deleted, nodeId }));
       return;
     }
 

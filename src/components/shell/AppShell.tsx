@@ -132,16 +132,16 @@ export function AppShell() {
 
       {/* Tab content */}
       <main className="content">
-        <div className={activeTab === "overview" ? "" : "view-hidden"}>
+        <div className={`tab-panel${activeTab === "overview" ? " active" : " view-hidden"}`}>
           <OverviewTab onLiveChipChange={handleLiveChipChange} />
         </div>
-        <div className={activeTab === "timeline" ? "" : "view-hidden"}>
+        <div className={`tab-panel${activeTab === "timeline" ? " active" : " view-hidden"}`}>
           <TimelineTab muted={muted} />
         </div>
-        <div className={activeTab === "roster" ? "" : "view-hidden"}>
+        <div className={`tab-panel${activeTab === "roster" ? " active" : " view-hidden"}`}>
           <RosterTab />
         </div>
-        <div className={activeTab === "tasks" ? "" : "view-hidden"}>
+        <div className={`tab-panel tab-panel-fill${activeTab === "tasks" ? " active" : " view-hidden"}`}>
           <TasksTab />
         </div>
       </main>

@@ -3,7 +3,6 @@ import { useScheduleStore } from '../../stores/useScheduleStore';
 import { useTimeStore } from '../../stores/useTimeStore';
 import {
   SESSIONS,
-  SESSION_ICON,
   SESSION_START,
   TOTAL_WINDOW,
   segmentPhase,
@@ -11,6 +10,35 @@ import {
 import { toMin } from '../../engines/timeSync';
 import { speak } from '../../lib/voice';
 import { Panel } from '../../components/ui/Panel';
+import {
+  Sunrise,
+  TrendingUp,
+  Bell,
+  Sunset,
+  FileText,
+  Activity,
+  Play,
+} from 'lucide-react';
+
+function getSessionIcon(id: string) {
+  switch (id) {
+    case 'PRE_OPEN_COLLECT':
+    case 'PRE_OPEN_MATCH':
+    case 'PRE_OPEN_BUFFER':
+      return <Sunrise size={18} style={{ color: 'var(--amber)' }} />;
+    case 'NORMAL':
+      return <TrendingUp size={18} style={{ color: 'var(--green)' }} />;
+    case 'CAS_WINDOW':
+    case 'CAS_SETTLEMENT':
+      return <Bell size={18} style={{ color: 'var(--cyan)' }} />;
+    case 'POST_CLOSE':
+      return <Sunset size={18} style={{ color: 'var(--orange)' }} />;
+    case 'MODIFICATION':
+      return <FileText size={18} style={{ color: 'var(--cyan)' }} />;
+    default:
+      return <Activity size={18} />;
+  }
+}
 
 function AnnouncementLog() {
   const { log } = useScheduleStore();
@@ -142,8 +170,8 @@ export function TimelineTab({ muted }: { muted: boolean }) {
             const phase = segmentPhase(s, session.id, nowMin);
             return (
               <div key={s.id} className={`phase-card ${phase}`} data-id={s.id}>
-                <div className="phase-card-icon">
-                  {SESSION_ICON[s.id] ?? '•'}
+                <div className="phase-card-icon" style={{ display: "flex", alignItems: "center", justifyContent: "center" }}>
+                  {getSessionIcon(s.id)}
                 </div>
                 <div>
                   <div className="phase-card-label">{s.label}</div>
@@ -163,8 +191,10 @@ export function TimelineTab({ muted }: { muted: boolean }) {
             className="btn primary"
             id="testVoiceBtn"
             onClick={() => speak(session.voice || 'Market status update.')}
+            style={{ display: "inline-flex", alignItems: "center", gap: 6 }}
           >
-            ▶ Test voice alert for current phase
+            <Play size={12} fill="currentColor" />
+            <span>Test voice alert for current phase</span>
           </button>
         </div>
       </Panel>
